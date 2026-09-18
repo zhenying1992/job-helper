@@ -1,4 +1,5 @@
 
+DATA_FMT = '%Y-%m-%d'
 
 class Status:
     FINISHED = '已完成'

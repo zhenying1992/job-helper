@@ -5,26 +5,17 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/job-helper.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/common/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/common/util.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/constant.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/data/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/data/db.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/data/model.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/data/service.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pages/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pages/job.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pages/jobs.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pages/overview.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/pages/urls.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/common/pagination.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/constant.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/jobs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/overview.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/overview.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/urls.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

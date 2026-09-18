@@ -1,19 +1,44 @@
 import json
+from datetime import datetime
 
-from peewee import AutoField, CharField, DateTimeField, ForeignKeyField
+from peewee import AutoField, CharField, DateTimeField, ForeignKeyField, IntegerField
 
 from src.data.db import BaseModel
 
+from src.constant import DATA_FMT
 
 class Job(BaseModel):
     id = AutoField()
     type = CharField()
     name = CharField(unique=True)
-    comment = CharField()
+    description = CharField()
+    progress = IntegerField()
     priority = CharField()
     status = CharField()
-    start_time = DateTimeField()
-    end_time = DateTimeField()
+    _start_time = DateTimeField(column_name='start_time')
+    _end_time = DateTimeField(column_name='end_time')
+
+    @property
+    def start_time(self):
+        return self._start_time.strftime(DATA_FMT)   # noqa
+
+    @start_time.setter
+    def start_time(self, value: str| datetime):
+        if isinstance(value, datetime):
+            self._start_time = value
+        else:
+            self._start_time = datetime.strptime(value, DATA_FMT)
+
+    @property
+    def end_time(self):
+        return self._end_time.strftime(DATA_FMT)   # noqa
+
+    @end_time.setter
+    def end_time(self, value: str | datetime):
+        if isinstance(value, datetime):
+            self._end_time = value
+        else:
+            self._end_time = datetime.strptime(value, DATA_FMT)
 
     class Meta:
         indexes = (
@@ -28,7 +53,7 @@ class Task(BaseModel):
     id = AutoField()
     job = ForeignKeyField(Job, backref='tasks', index=True)
     name = CharField()
-    comment = CharField()
+    description = CharField()
     priority = CharField()
     status = CharField()
     start_time = DateTimeField()

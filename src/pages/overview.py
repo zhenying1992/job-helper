@@ -12,13 +12,6 @@ def overview():
         bottom_row
     ], expand=True)
 
-    return ft.Row([
-        tech_card("待完成工作", "28", "同比上周 ↑12%"),
-        tech_card("已完成任务", "142", "本月累计完成"),
-        tech_card("逾期任务", "3", "需重点关注"),
-    ], spacing=24)
-
-
 def tech_card(title, value, sub_text):
     return ft.Container(
         width=360,

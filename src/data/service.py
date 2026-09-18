@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 
+from src.common.pagination import Pagination
 from src.config import DEFAULT_JOB_END_DAY
 from src.constant import Priority, Status
 from src.data.model import Job, Task, Log
@@ -8,20 +9,52 @@ from src.data.model import Job, Task, Log
 
 class JobService:
     @staticmethod
-    def query() -> list[Job]:
-        return list(Job.select())
+    def query(
+            pagination: Pagination[Job],
+            keyword: str = "",
+            type: Optional[str] = None,
+            status: Optional[str] = None,
+    ) -> Pagination[Job]:
+        q = Job.select()
+        if keyword:
+            q = q.where(Job.name.contains(keyword))
+
+        if type is not None:
+            q = q.where(Job.type == type)
+
+        if status is not None:
+            q = q.where(Job.status == status)
+
+        pagination.total = q.count()
+        pagination.data = list(q.paginate(pagination.current, pagination.page_size))
+        return pagination
 
     @staticmethod
-    def create(name: str, type: str, comment: str, priority: str = Priority.LOW, status: str = Status.NOT_START,
-            start_time: datetime = None, end_time: datetime = None, ) -> Job:
+    def create(
+            name: str,
+            type: str,
+            description: str,
+            priority: str = Priority.LOW,
+            status: str = Status.NOT_START,
+            start_time: datetime = None,
+            end_time: datetime = None,
+    ) -> Job:
         if not start_time:
             start_time = datetime.now()
 
         if not end_time:
             end_time = datetime.now() + timedelta(days=DEFAULT_JOB_END_DAY)
 
-        job = Job(name=name, type=type, comment=comment, priority=priority, status=status, start_time=start_time,
-            end_time=end_time, )
+        job = Job(
+            name=name,
+            type=type,
+            description=description,
+            priority=priority,
+            progress=0,
+            status=status,
+            start_time=start_time,
+            end_time=end_time,
+        )
         job.save()
         return job
 
@@ -30,7 +63,8 @@ class JobService:
         return Job.get(Job.id == id)
 
     def update(self, id: int, name: Optional[str] = None, comment: Optional[str] = None, priority: Optional[str] = None,
-            status: Optional[str] = None, start_time: Optional[datetime] = None, end_time: Optional[datetime] = None, ):
+               status: Optional[str] = None, start_time: Optional[datetime] = None,
+               end_time: Optional[datetime] = None, ):
         job = self.get(id)
 
         if name is not None:
@@ -65,14 +99,14 @@ class TaskService:
 
     @staticmethod
     def create(job_id: int, name: str, comment: str, priority: str = Priority.LOW, status: str = Status.NOT_START,
-            start_time: datetime = None, end_time: datetime = None, ):
+               start_time: datetime = None, end_time: datetime = None, ):
         if not start_time:
             start_time = datetime.now()
         if not end_time:
             end_time = datetime.now() + timedelta(days=DEFAULT_JOB_END_DAY)
 
         task = Task(job_id=job_id, name=name, comment=comment, priority=priority, status=status, start_time=start_time,
-            end_time=end_time, )
+                    end_time=end_time, )
         task.save()
         return task
 
@@ -81,7 +115,7 @@ class TaskService:
         return Task.get(Task.id == id)
 
     def update(self, id: int, name: Optional[str] = None, comment: Optional[str] = None, priority: Optional[str] = None,
-            status: Optional[str] = None, start_time: datetime = None, end_time: datetime = None, ):
+               status: Optional[str] = None, start_time: datetime = None, end_time: datetime = None, ):
         task = self.get(id)
         if name is not None:
             task.name = name
