@@ -8,37 +8,21 @@ from src.data.model import Job
 from src.data.service import JobService, TaskService
 from src.pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
 
+
 @ft.component
 def overview():
 
-    def folder_panel():
-        async def handle_get_directory_path(e: ft.Event[ft.Button]):
-            a = await ft.FilePicker().get_directory_path()
-            print(a)
-            # directory_path.value = await ft.FilePicker().get_directory_path()
-
-        return ft.Row(
-                controls=[
-                    ft.Button(
-                        content="Open directory",
-                        icon=ft.Icons.FOLDER_OPEN,
-                        on_click=handle_get_directory_path,
-                        # disabled=page.web,  # disable this button in web mode
-                    ),
-                    directory_path := ft.Text(),
-                ]
-            )
-
     return ft.Column(
         [
-            folder_panel(),
             ft.Container(height=16),
-         build_top(),
-         ft.Container(height=16),
-         get_center(),
-         ft.Container(height=16),
-         get_bottom_row()],
-        expand=True)
+            build_top(),
+            ft.Container(height=16),
+            get_center(),
+            ft.Container(height=16),
+            get_bottom_row()
+        ],
+        expand=True
+    )
 
 
 def tech_card(title, value, sub_text):

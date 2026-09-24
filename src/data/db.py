@@ -13,7 +13,8 @@ class BaseModel(Model):
         database = db
 
 def init_db():
+    logger.info(f"开始初始化数据库: {get_db_path()}")
     from src.data.model import Job, Task, Log
     db.connect()
-    logger.info(f"数据库连接成功: {db}")
+    logger.info(f"数据库连接成功")
     db.create_tables([Job, Task, Log], safe=True)
