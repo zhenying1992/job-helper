@@ -19,3 +19,8 @@ def get_urls():
             ]
         )]
     )
+
+@ft.component
+def app():
+    urls = get_urls()
+    return ft.SafeArea(urls)

@@ -39,10 +39,14 @@ def get_init_view(page):
         # 关闭首次引导弹窗
         page.pop_dialog()
 
+        from src.data.db import init_db
+        init_db()
+        from src.pages.urls import app
+        page.render(app)
+
     return ft.AlertDialog(
             modal=True,
-            title=ft.Text("请选择数据存放目录"),
-            content=ft.Text("选择文件夹用于存放sqlite数据库文件"),
+            title=ft.Text("首次启动请选择数据存放目录"),
             actions=[
                 ft.Button(
                     "选择目录",
