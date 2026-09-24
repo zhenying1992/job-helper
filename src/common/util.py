@@ -1,26 +1,12 @@
-import os
-from typing import Any
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+from src.constant import DATE_FMT
 
 
-class FileUtil:
-    @staticmethod
-    def is_file_exist(file: str) -> bool:
-        return os.path.isfile(file)
+def utc_2_naive_datetime(utc_dt: datetime) -> datetime:
+    return utc_dt.astimezone(ZoneInfo(key='Asia/Shanghai')).replace(tzinfo=None)
 
-    @staticmethod
-    def new_dir(path: str):
-        raise
 
-    @staticmethod
-    def new_file(file: str):
-        FileUtil.new_dir(os.path.dirname(file))
-        raise
-
-    @staticmethod
-    def write(file: str, content: Any):
-        FileUtil.new_file(file)
-        raise
-
-    @staticmethod
-    def read(file: str) -> Any:
-        raise
+def datetime_2_date_str(dt: datetime, fmt: str = DATE_FMT) -> str:
+    return dt.strftime(fmt)

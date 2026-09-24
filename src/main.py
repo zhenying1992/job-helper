@@ -17,7 +17,4 @@ def main(page: ft.Page):
 
 if __name__ == "__main__":
     init_db()
-    try:
-        ft.run(main)
-    except Exception as e:
-        print(e)
+    ft.run(main)

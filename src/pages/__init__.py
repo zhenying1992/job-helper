@@ -75,7 +75,6 @@ class HeaderBuilder:
 @ft.component
 def layout():
     outlet = ft.use_route_outlet()
-    print(outlet)
     return ft.Column(
         [
             HeaderBuilder().generate(),

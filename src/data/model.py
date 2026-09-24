@@ -5,7 +5,6 @@ from peewee import AutoField, CharField, DateTimeField, ForeignKeyField, Integer
 
 from src.data.db import BaseModel
 
-from src.constant import DATA_FMT
 
 class Job(BaseModel):
     id = AutoField()
@@ -15,30 +14,11 @@ class Job(BaseModel):
     progress = IntegerField()
     priority = CharField()
     status = CharField()
-    _start_time = DateTimeField(column_name='start_time')
-    _end_time = DateTimeField(column_name='end_time')
-
-    @property
-    def start_time(self):
-        return self._start_time.strftime(DATA_FMT)   # noqa
-
-    @start_time.setter
-    def start_time(self, value: str| datetime):
-        if isinstance(value, datetime):
-            self._start_time = value
-        else:
-            self._start_time = datetime.strptime(value, DATA_FMT)
-
-    @property
-    def end_time(self):
-        return self._end_time.strftime(DATA_FMT)   # noqa
-
-    @end_time.setter
-    def end_time(self, value: str | datetime):
-        if isinstance(value, datetime):
-            self._end_time = value
-        else:
-            self._end_time = datetime.strptime(value, DATA_FMT)
+    start_time = DateTimeField()
+    end_time = DateTimeField()
+    created_time = DateTimeField(default=datetime.now)
+    updated_time = DateTimeField(default=datetime.now)
+    updated_content = CharField(default='')
 
     class Meta:
         indexes = (
@@ -65,13 +45,12 @@ class Task(BaseModel):
             (('name',), True),
         )
 
-
 class Log(BaseModel):
     id = AutoField()
     job = ForeignKeyField(Job, backref='logs')
     name = CharField()
     content = CharField()
-    created_time = DateTimeField()
+    created_time = DateTimeField(default=datetime.now)
     _related_files = CharField(column_name='related_files')
 
     class Meta:
