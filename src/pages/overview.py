@@ -8,12 +8,37 @@ from src.data.model import Job
 from src.data.service import JobService, TaskService
 from src.pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
 
-
 @ft.component
 def overview():
+
+    def folder_panel():
+        async def handle_get_directory_path(e: ft.Event[ft.Button]):
+            a = await ft.FilePicker().get_directory_path()
+            print(a)
+            # directory_path.value = await ft.FilePicker().get_directory_path()
+
+        return ft.Row(
+                controls=[
+                    ft.Button(
+                        content="Open directory",
+                        icon=ft.Icons.FOLDER_OPEN,
+                        on_click=handle_get_directory_path,
+                        # disabled=page.web,  # disable this button in web mode
+                    ),
+                    directory_path := ft.Text(),
+                ]
+            )
+
     return ft.Column(
-        [ft.Container(height=16), build_top(), ft.Container(height=16), get_center(), ft.Container(height=16),
-         get_bottom_row()], expand=True)
+        [
+            folder_panel(),
+            ft.Container(height=16),
+         build_top(),
+         ft.Container(height=16),
+         get_center(),
+         ft.Container(height=16),
+         get_bottom_row()],
+        expand=True)
 
 
 def tech_card(title, value, sub_text):
@@ -69,6 +94,7 @@ def get_center():
                                 title_style=normal_title_style)
                 for status, value in JobService.ratio().items()
             ]
+
         def on_hover(e):
             for idx, s in enumerate(chart.sections):
                 if idx == e.section_index:
@@ -102,11 +128,7 @@ def get_center():
             ])
         )
 
-
     ####
-
-
-
 
     data = JobService.finish_trend()
     task = TaskService.finish_trend()
@@ -114,9 +136,9 @@ def get_center():
     def get_data():
         return [LineChartData(
             points=[
-                LineChartDataPoint(idx, value , tooltip=str(value))
-            for idx, value in enumerate(data.values())
-        ], color="#22c55e", stroke_width=3, point=True, curved=True),
+                LineChartDataPoint(idx, value, tooltip=str(value))
+                for idx, value in enumerate(data.values())
+            ], color="#22c55e", stroke_width=3, point=True, curved=True),
 
             LineChartData(
                 points=[
@@ -124,7 +146,6 @@ def get_center():
                     for idx, value in enumerate(task.values())
                 ], color="#ef4444", stroke_width=3, point=True, curved=True)
         ]
-
 
     def get_labels():
         labels = []
