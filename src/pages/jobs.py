@@ -1,8 +1,8 @@
 import datetime
+from typing import Callable
 
 import flet as ft
 
-from src.common.decorate import catch_error
 from src.common.pagination import Pagination
 from src.common.util import utc_2_naive_datetime, datetime_2_date_str
 from src.constant import Status
@@ -23,44 +23,85 @@ def jobs_view():
         [current, page_size, keyword, type, status, refresh_flag]
     )
 
-    @catch_error
-    def get_pagination_bar():
-        # 分页控件
+    return JobsView(
+        current=current,
+        set_current=set_current,
+        page_size=page_size,
+        set_page_size=set_page_size,
+        keyword=keyword,
+        set_keyword=set_keyword,
+        type=type,
+        set_type=set_type,
+        status=status,
+        set_status=set_status,
+        refresh_flag=refresh_flag,
+        set_refresh_flag=set_refresh_flag,
+        pagination=pagination,
+    ).build()
+
+class JobsView:
+    def __init__(
+            self,
+            current: int,
+            set_current: Callable,
+            page_size: int,
+            set_page_size: Callable,
+            keyword: str,
+            set_keyword: Callable,
+            type: str,
+            set_type: Callable,
+            status: str,
+            set_status: Callable,
+            refresh_flag: bool,
+            set_refresh_flag: Callable,
+            pagination: Pagination,
+    ):
+        self.current = current
+        self.set_current = set_current
+        self.page_size = page_size
+        self.set_page_size = set_page_size
+        self.keyword = keyword
+        self.set_keyword = set_keyword
+        self.type = type
+        self.set_type = set_type
+        self.status = status
+        self.set_status = set_status
+        self.refresh_flag = refresh_flag
+        self.set_refresh_flag = set_refresh_flag
+        self.pagination = pagination
+
+    def build(self):
         return ft.Container(
-            padding=ft.Padding(left=24, right=24, top=16, bottom=16),
-            content=ft.Row([
-                ft.Text(f"共 {pagination.total} 条记录", color="#94a3b8"),
-                ft.Container(expand=True),
-                ft.Dropdown(
-                    label="每页条数",
-                    width=100,
-                    options=[ft.dropdown.Option("10"), ft.dropdown.Option("20"), ft.dropdown.Option("50")],
-                    value="10",
-                    on_select=lambda e: set_page_size(int(e.control.value))
-                ),
-                ft.Container(width=10),
-                ft.Button("上一页", disabled=current <= 1, on_click=lambda e: set_current(current-1)),
-                ft.Text(f"第 {pagination.current} / {pagination.total_page} 页"),
-                ft.Button("下一页", disabled=current >= pagination.total_page, on_click=lambda e: set_current(current+1)),
-            ])
+            padding=ft.Padding(left=24, right=24),
+            content=ft.Column(
+                controls=[
+                    self.build_action_bar(),
+                    self.build_table(),
+                    self.build_pagination_bar(),
+                ],
+                spacing=20
+            )
         )
 
-    def get_action_bar():
-        # 顶部筛选操作栏
+    def build_action_bar(self):
+        """顶部筛选栏
+
+        :return:
+        """
         return ft.Container(
             padding=ft.Padding(left=24, right=24, top=16, bottom=16),
             content=ft.Row(
                 controls=[
                     # ft.Container(width=3),
                     ft.TextField(
-                        value=keyword,
+                        value=self.keyword,
                         hint_text="输入工作名称搜索",
                         width=320,
                         height=40,
                         border_radius=8,
                         bgcolor="#161d34",
                         text_size=14,
-                        on_change=lambda e: set_keyword(e.control.value),
+                        on_change=lambda e: self.set_keyword(e.control.value),
                     ),
                     ft.Dropdown(
                         label="工作类型",
@@ -72,17 +113,17 @@ def jobs_view():
                             ft.dropdown.Option("风险核查")
                         ],
                         value="全部",
-                        on_select=lambda e: set_type(e.control.value),
+                        on_select=lambda e: self.set_type(e.control.value),
                     ),
                     ft.Dropdown(
                         label="任务状态",
                         width=140,
                         options=[
-                            ft.dropdown.Option(i)
-                            for i in Status.list()
-                        ] + [ft.dropdown.Option(key="", text='全部')],
+                                    ft.dropdown.Option(i)
+                                    for i in Status.list()
+                                ] + [ft.dropdown.Option(key="", text='全部')],
                         value="全部",
-                        on_select=lambda e: set_status(e.control.value),
+                        on_select=lambda e: self.set_status(e.control.value),
                     ),
                     ft.Container(expand=True),
                     ft.Button(
@@ -90,123 +131,141 @@ def jobs_view():
                         bgcolor="#2563eb",
                         color=ft.Colors.WHITE,
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
-                        on_click=open_new_job_dialog,
+                        on_click=self.open_new_job_dialog,
                     )
                 ],
             )
         )
 
-    def open_new_job_dialog(e: ft.Event[ft.Button]):
+    def open_new_job_dialog(self, e: ft.Event[ft.Button]):
+        # 表单控件
+        job_name = ft.TextField(
+            label="工作名",
+            hint_text="请输入工作名称",
+            border_color="#40C9FF",
+            focused_border_color="#40C9FF",
+            bgcolor="#171e38",
+            color="#e2e8f0",
+            label_style=ft.TextStyle(color="#94a3b8"),
+        )
+        job_desc = ft.TextField(
+            label="描述",
+            hint_text="非必填，填写任务说明",
+            multiline=True,
+            min_lines=2,
+            border_color="#40C9FF",
+            focused_border_color="#40C9FF",
+            bgcolor="#171e38",
+            color="#e2e8f0",
+            label_style=ft.TextStyle(color="#94a3b8"),
+        )
+        job_type = ft.Dropdown(
+            label="类型",
+            options=[
+                ft.DropdownOption(key="风险核查", content=ft.Text("风险核查", color="#94a3b8")),
+                ft.DropdownOption("资料整理"),
+                ft.DropdownOption("案件复核"),
+                ft.DropdownOption("其他"),
+            ],
+            border_color="#40C9FF",
+            focused_border_color="#40C9FF",
+            bgcolor="#171e38",
+            color="#e2e8f0",
+            label_style=ft.TextStyle(color="#94a3b8"),
+        )
+        job_priority = ft.Dropdown(
+            label="优先级",
+            value="中",
+            options=[
+                ft.dropdown.Option("高"),
+                ft.dropdown.Option("中"),
+                ft.dropdown.Option("低"),
+            ],
+            border_color="#40C9FF",
+            focused_border_color="#40C9FF",
+            bgcolor="#171e38",
+            color="#e2e8f0",
+            label_style=ft.TextStyle(color="#94a3b8"),
+        )
+        today = datetime.date.today()
+        today_7 = datetime.date.today() + datetime.timedelta(days=7)
+        picker = ft.DateRangePicker(
+            locale=ft.Locale("zh", "Hans"),
+            start_value=datetime.datetime(year=today.year, month=today.month, day=today.day),
+            end_value=datetime.datetime(year=today_7.year, month=today_7.month, day=today_7.day),
+            # first_date=datetime.datetime(year=2024, month=1, day=1),
+            # last_date=datetime.datetime(year=2026, month=12, day=31),
+            current_date=today,
+            # on_change=handle_change,
+            # on_dismiss=handle_dismissal,
+        )
+
+        picker_button = ft.Button(
+            icon=ft.Icons.CALENDAR_MONTH,
+            content="选择时间",
+            on_click=lambda _: ft.context.page.show_dialog(picker)
+        )
+
+        def submit_job(e):
+            JobService.create(
+                name=job_name.value,
+                description=job_desc.value,
+                type=job_type.value,
+                priority=job_priority.value,
+                start_time=utc_2_naive_datetime(picker.start_value),
+                end_time=utc_2_naive_datetime(picker.end_value),
+            )
+            ft.context.page.pop_dialog()
+            self.set_refresh_flag(not self.refresh_flag)
+
+        dialog = ft.AlertDialog(
+            title=ft.Text("新建工作", size=20, color="#CFD8FF", weight=ft.FontWeight.BOLD),
+            bgcolor="#111834",
+            content=ft.Container(
+                width=520,
+                content=ft.Column(
+                    [
+                        job_name,
+                        job_desc,
+                        job_type,
+                        job_priority,
+                        picker_button,
+                    ],
+                    tight=True,
+                    spacing=16
+                ),
+            ),
+            actions=[
+                ft.TextButton("取消", on_click=lambda e: setattr(dialog, "open", False) or ft.context.page.update()),
+                ft.Button("确认创建", on_click=submit_job, bgcolor="#40C9FF", color="#0f1529"),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
         ft.context.page.show_dialog(dialog=dialog)
 
-    # 表单控件
-    job_name = ft.TextField(
-        label="工作名",
-        hint_text="请输入工作名称",
-        border_color="#40C9FF",
-        focused_border_color="#40C9FF",
-        bgcolor="#171e38",
-        color="#e2e8f0",
-        label_style=ft.TextStyle(color="#94a3b8"),
-    )
-    job_desc = ft.TextField(
-        label="描述",
-        hint_text="非必填，填写任务说明",
-        multiline=True,
-        min_lines=2,
-        border_color="#40C9FF",
-        focused_border_color="#40C9FF",
-        bgcolor="#171e38",
-        color="#e2e8f0",
-        label_style=ft.TextStyle(color="#94a3b8"),
-    )
-    job_type = ft.Dropdown(
-        label="类型",
-        options=[
-            ft.DropdownOption(key="风险核查", content=ft.Text("风险核查", color="#94a3b8")),
-            ft.DropdownOption("资料整理"),
-            ft.DropdownOption("案件复核"),
-            ft.DropdownOption("其他"),
-        ],
-        border_color="#40C9FF",
-        focused_border_color="#40C9FF",
-        bgcolor="#171e38",
-        color="#e2e8f0",
-        label_style=ft.TextStyle(color="#94a3b8"),
-    )
-    job_priority = ft.Dropdown(
-        label="优先级",
-        value="中",
-        options=[
-            ft.dropdown.Option("高"),
-            ft.dropdown.Option("中"),
-            ft.dropdown.Option("低"),
-        ],
-        border_color="#40C9FF",
-        focused_border_color="#40C9FF",
-        bgcolor="#171e38",
-        color="#e2e8f0",
-        label_style=ft.TextStyle(color="#94a3b8"),
-    )
-    today = datetime.date.today()
-    today_7 = datetime.date.today() + datetime.timedelta(days=7)
-    picker = ft.DateRangePicker(
-        locale=ft.Locale("zh", "Hans"),
-        start_value=datetime.datetime(year=today.year, month=today.month, day=today.day),
-        end_value=datetime.datetime(year=today_7.year, month=today_7.month, day=today_7.day),
-        # first_date=datetime.datetime(year=2024, month=1, day=1),
-        # last_date=datetime.datetime(year=2026, month=12, day=31),
-        current_date=today,
-        # on_change=handle_change,
-        # on_dismiss=handle_dismissal,
-    )
-
-    picker_button = ft.Button(
-        icon=ft.Icons.CALENDAR_MONTH,
-        content="选择时间",
-
-        on_click=lambda _: ft.context.page.show_dialog(picker)
-    )
-
-    def submit_job():
-        JobService.create(
-            name=job_name.value,
-            description=job_desc.value,
-            type=job_type.value,
-            priority=job_priority.value,
-            start_time=utc_2_naive_datetime(picker.start_value),
-            end_time=utc_2_naive_datetime(picker.end_value),
+    def build_table(self):
+        # 表格定义
+        return ft.DataTable(
+            border_radius=10,
+            bgcolor="#12182e",
+            heading_row_color="#1b2442",
+            columns=[
+                ft.DataColumn(label=ft.Text("ID", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("名称", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("类型", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("优先级", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("状态", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("进度", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("开始时间", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("结束时间", color="#cbd5e1")),
+                ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
+            ],
+            rows=self.list_row(),
         )
-        ft.context.page.pop_dialog()
-        set_refresh_flag(not refresh_flag)
 
-    dialog = ft.AlertDialog(
-        title=ft.Text("新建工作", size=20, color="#CFD8FF", weight=ft.FontWeight.BOLD),
-        bgcolor="#111834",
-        content=ft.Container(
-            width=520,
-            content=ft.Column(
-                [
-                    job_name,
-                    job_desc,
-                    job_type,
-                    job_priority,
-                    picker_button,
-                ],
-                tight=True,
-                spacing=16
-            ),
-        ),
-        actions=[
-            ft.TextButton("取消", on_click=lambda e: setattr(dialog, "open", False) or ft.context.page.update()),
-            ft.Button("确认创建", on_click=submit_job, bgcolor="#40C9FF", color="#0f1529"),
-        ],
-        actions_alignment=ft.MainAxisAlignment.END,
-    )
-
-    def list_row(pagination):
+    def list_row(self):
         _rows = []
-        for _job in pagination.data:
+        for _job in self.pagination.data:
             _row = ft.DataRow(cells=[
                 ft.DataCell(ft.Text(_job.id, color="#cbd5e1")),
                 ft.DataCell(ft.Text(_job.name, color="#cbd5e1")),
@@ -225,34 +284,31 @@ def jobs_view():
 
         return _rows
 
-    def get_table(pagination):
-        # 表格定义
-        return ft.DataTable(
-            border_radius=10,
-            bgcolor="#12182e",
-            heading_row_color="#1b2442",
-            columns=[
-                ft.DataColumn(label=ft.Text("ID", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("名称", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("类型", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("优先级", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("状态", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("进度", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("开始时间", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("结束时间", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
-            ],
-            rows=list_row(pagination),
+    def build_pagination_bar(self):
+        # 分页控件
+        return ft.Container(
+            padding=ft.Padding(left=24, right=24, top=16, bottom=16),
+            content=ft.Row([
+                ft.Text(f"共 {self.pagination.total} 条记录", color="#94a3b8"),
+                ft.Container(expand=True),
+                ft.Dropdown(
+                    label="每页条数",
+                    width=100,
+                    options=[ft.dropdown.Option("10"), ft.dropdown.Option("20"), ft.dropdown.Option("50")],
+                    value="10",
+                    on_select=lambda e: self.set_page_size(int(e.control.value))
+                ),
+                ft.Container(width=10),
+                ft.Button(
+                    "上一页",
+                    disabled=self.current <= 1,
+                    on_click=lambda e: self.set_current(self.current - 1)
+                ),
+                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页"),
+                ft.Button(
+                    "下一页",
+                    disabled=self.current >= self.pagination.total_page,
+                    on_click=lambda e: self.set_current(self.current + 1)
+                ),
+            ])
         )
-
-    return ft.Container(
-        padding=ft.Padding(left=24, right=24),
-        content=ft.Column(
-            controls=[
-                get_action_bar(),
-                get_table(pagination),
-                get_pagination_bar(),
-            ],
-            spacing=20
-        )
-    )
