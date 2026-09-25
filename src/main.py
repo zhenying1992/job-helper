@@ -2,7 +2,7 @@
 import flet as ft
 
 from src.config import get_work_dir
-from src.pages.init import get_init_view
+from src.pages.init import InitView
 import logging
 
 
@@ -15,12 +15,13 @@ def main(page: ft.Page):
 
     if not get_work_dir():
         logger.warning("首次启动，缺少工作目录配置")
-        page.show_dialog(get_init_view(page))
+        page.show_dialog(InitView(page)())
     else:
         logger.info("非首次启动，跳过目录配置")
         from src.data.db import init_db
-        init_db()
         from src.pages.urls import app
+
+        init_db()
         page.render(app)
 
 if __name__ == "__main__":
