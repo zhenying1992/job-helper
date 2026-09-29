@@ -12,6 +12,7 @@ def main(page: ft.Page):
     page.padding=0
     page.margin=0
     page.bgcolor = "#0B1020"
+    page.window.min_width = 1000
 
     if not get_work_dir():
         logger.warning("首次启动，缺少工作目录配置")

@@ -1,0 +1,25 @@
+import flet as ft
+
+# 全局配色 全息深蓝科技风
+BG_MAIN = "#040b1c"  # 页面最深背景
+BG_PANEL = "#0b1730"  # 卡片面板底色
+BORDER_COLOR = "#2060c880"  # 半透蓝边框
+GLOW_BLUE = "#38a8ff60"
+GLOW_CYAN = "#26f0d060"
+GLOW_PURPLE = "#a855f760"
+COLOR_TEXT_TITLE = "#d0e8ff"
+COLOR_TEXT_BODY = "#94b8e8"
+COLOR_WARN_RED = "#ff4422"
+COLOR_SUCCESS = "#26f0d0"
+COLOR_PRIMARY = "#38a8ff"
+
+# 颜色
+COLOR_DANGER = "#ff4757"
+COLOR_WARN ="#ffa502"
+COLOR_SAFE = "#2ed573"
+
+COLOR_JOB_FINISH = "#26f0d0"
+COLOR_TASK_FINISH = "#38a8ff"
+
+#
+TRENT_DAY = 30

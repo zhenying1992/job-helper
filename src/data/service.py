@@ -8,6 +8,7 @@ from src.common.util import datetime_2_date_str
 from src.config import DEFAULT_JOB_END_DAY
 from src.constant import Priority, Status
 from src.data.model import Job, Task, Log
+from src.pages.common import TRENT_DAY
 
 
 class JobService:
@@ -102,20 +103,20 @@ class JobService:
         return c1, c2
 
     @staticmethod
-    def finish_trend( days: int=7) -> dict[str, int]:
+    def finish_trend(days: int = TRENT_DAY) -> dict[str, int]:
         jobs = Job.select().where(
             Job.status == Status.FINISHED,
             Job.end_time > datetime.now() - timedelta(days=days),
             Job.end_time < datetime.now()
         )
-        r={}
-        for i in range(-7,0):
-            day = datetime.now()+timedelta(days=i)
+        r = {}
+        for i in range(-days, 1):
+            day = datetime.now() + timedelta(days=i)
             r.setdefault(datetime_2_date_str(day), 0)
 
         for job in jobs:
             day = datetime_2_date_str(job.end_time)
-            r[day] +=1
+            r[day] += 1
 
         return r
 
@@ -130,6 +131,7 @@ class JobService:
             r[job.status] += 1
 
         return r
+
 
 class TaskService:
     @staticmethod
@@ -196,20 +198,20 @@ class TaskService:
         return c1, c2
 
     @staticmethod
-    def finish_trend( days: int=7) -> dict[str, int]:
+    def finish_trend(days: int = TRENT_DAY) -> dict[str, int]:
         tasks = Task.select().where(
             Task.status == Status.FINISHED,
             Task.end_time > datetime.now() - timedelta(days=days),
             Task.end_time < datetime.now()
         )
-        r={}
-        for i in range(-7,0):
-            day = datetime.now()+timedelta(days=i)
+        r = {}
+        for i in range(-days, 1):
+            day = datetime.now() + timedelta(days=i)
             r.setdefault(datetime_2_date_str(day), 0)
 
         for task in tasks:
             day = datetime_2_date_str(task.end_time)
-            r[day] +=1
+            r[day] += 1
 
         return r
 

@@ -2,6 +2,7 @@ import datetime
 from typing import Callable
 
 import flet as ft
+from flet import MainAxisAlignment
 
 from src.common.pagination import Pagination
 from src.common.util import utc_2_naive_datetime, datetime_2_date_str
@@ -38,6 +39,7 @@ def jobs_view():
         set_refresh_flag=set_refresh_flag,
         pagination=pagination,
     ).build()
+
 
 class JobsView:
     def __init__(
@@ -80,7 +82,7 @@ class JobsView:
                     self.build_pagination_bar(),
                 ],
                 spacing=20
-            )
+            ),
         )
 
     def build_action_bar(self):
@@ -245,38 +247,64 @@ class JobsView:
 
     def build_table(self):
         # 表格定义
-        return ft.DataTable(
-            border_radius=10,
-            bgcolor="#12182e",
-            heading_row_color="#1b2442",
-            columns=[
-                ft.DataColumn(label=ft.Text("ID", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("名称", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("类型", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("优先级", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("状态", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("进度", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("开始时间", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("结束时间", color="#cbd5e1")),
-                ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
-            ],
-            rows=self.list_row(),
+        return ft.Container(
+            ft.Row(
+                controls=[ft.DataTable(
+                    border_radius=10,
+                    bgcolor="#12182e",
+                    heading_row_color="#1b2442",
+                    columns=[
+                        ft.DataColumn(label=ft.Text("ID", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("名称", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+
+                        ft.DataColumn(label=ft.Text("类型", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("优先级", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("状态", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("进度", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("开始时间", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("结束时间", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                        ft.DataColumn(label=ft.Text("操作", color="#cbd5e1"),
+                                      heading_row_alignment=MainAxisAlignment.CENTER),
+                    ],
+                    rows=self.list_row(),
+                    expand=True
+                )]
+            )
         )
 
     def list_row(self):
         _rows = []
         for _job in self.pagination.data:
             _row = ft.DataRow(cells=[
-                ft.DataCell(ft.Text(_job.id, color="#cbd5e1")),
-                ft.DataCell(ft.Text(_job.name, color="#cbd5e1")),
-                ft.DataCell(ft.Text(_job.type, color="#cbd5e1")),
-                ft.DataCell(ft.Text(_job.priority, color="#cbd5e1")),
-                ft.DataCell(ft.Container(ft.Text(_job.status, size=12), bgcolor="#f97316", padding=3, border_radius=4)),
-                ft.DataCell(ft.Text(f'{_job.progress}%', color="#cbd5e1")),
-                ft.DataCell(ft.Text(datetime_2_date_str(_job.start_time), color="#cbd5e1")),
-                ft.DataCell(ft.Text(datetime_2_date_str(_job.end_time), color="#cbd5e1")),
+                ft.DataCell(ft.Text(_job.id, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(
+                    ft.Text(
+                        _job.name, color="#cbd5e1", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, width=300,
+                        tooltip=_job.name, text_align=ft.TextAlign.CENTER,
+                    ),
+                ),
+                ft.DataCell(ft.Text(_job.type, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(_job.priority, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(
+                    ft.Container(
+                        ft.Text(_job.status, size=12, text_align=ft.TextAlign.CENTER), bgcolor="#f97316",
+                        padding=3, border_radius=4)
+                ),
+                ft.DataCell(ft.Text(f'{_job.progress}%', color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(
+                    ft.Text(datetime_2_date_str(_job.start_time), color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(
+                    ft.Text(datetime_2_date_str(_job.end_time), text_align=ft.TextAlign.CENTER, color="#cbd5e1")),
                 ft.DataCell(ft.Row([
-                    ft.TextButton("查看", on_click=lambda: ft.context.page.navigate(f"/job/{_job.id}")),
+                    ft.TextButton("查看", on_click=lambda e, _job=_job: ft.context.page.navigate(f"/job/{_job.id}")),
                     ft.TextButton("编辑"),
                 ]))
             ])
@@ -291,24 +319,26 @@ class JobsView:
             content=ft.Row([
                 ft.Text(f"共 {self.pagination.total} 条记录", color="#94a3b8"),
                 ft.Container(expand=True),
-                ft.Dropdown(
-                    label="每页条数",
-                    width=100,
-                    options=[ft.dropdown.Option("10"), ft.dropdown.Option("20"), ft.dropdown.Option("50")],
-                    value="10",
-                    on_select=lambda e: self.set_page_size(int(e.control.value))
-                ),
+
+                # ft.Dropdown(
+                #     label="每页条数",
+                #     width=100,
+                #     options=[ft.dropdown.Option("10"), ft.dropdown.Option("20"), ft.dropdown.Option("50")],
+                #     value="10",
+                #     on_select=lambda e: self.set_page_size(int(e.control.value)),
+                #     color='#999999'
+                # ),
                 ft.Container(width=10),
                 ft.Button(
                     "上一页",
                     disabled=self.current <= 1,
-                    on_click=lambda e: self.set_current(self.current - 1)
+                    on_click=lambda e: self.set_current(self.current - 1),color='#999999'
                 ),
-                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页"),
+                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页",color='#999999'),
                 ft.Button(
                     "下一页",
                     disabled=self.current >= self.pagination.total_page,
-                    on_click=lambda e: self.set_current(self.current + 1)
+                    on_click=lambda e: self.set_current(self.current + 1),color='#999999'
                 ),
             ])
         )

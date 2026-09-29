@@ -1,11 +1,13 @@
 import datetime
 
-import flet as ft
+from flet import TextAlign
 from flet_charts import *
 
-from src.constant import Status
+from src.common.util import datetime_2_date_str
+from src.constant import Status, DATE_TIME_FMT
 from src.data.model import Job
 from src.data.service import JobService, TaskService
+from src.pages.common import *
 from src.pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
 
 
@@ -67,23 +69,25 @@ class Center:
         return ft.Row([
             ft.Container(
                 width=340,
-                bgcolor="#1e293b",
+                height=330,
+                bgcolor="#111827",
                 border_radius=8,
                 padding=20,
                 content=self.build_left(),
             ),
             ft.Container(
-                expand=True, bgcolor=BG_PANEL, border_radius=BORDER_RADIUS, padding=20,
+                expand=True,
+                bgcolor=BG_PANEL,
+                border_radius=BORDER_RADIUS,
+                padding=20,
                 # border=ft.border.all(1, "#254b80"),
                 content=ft.Column(
                     controls=[
                         ft.Text("工作进展", size=16, color="#22d3ee"),
                         ft.Container(height=30),  # 占位,
                         self.build_right()
-                    ],
-                    expand=True)
+                    ])
             )
-
         ], spacing=16)
 
     # 左边
@@ -115,9 +119,9 @@ class Center:
         )
 
         return ft.Column([
-                ft.Text("任务分布饼图", color="#3b82f6", size=16, weight=ft.FontWeight.BOLD),
-                chart
-            ])
+            ft.Text("任务分布饼图", color="#3b82f6", size=16, weight=ft.FontWeight.BOLD),
+            chart
+        ])
 
     def get_left_data(self):
         normal_radius = 80
@@ -134,7 +138,7 @@ class Center:
         return LineChart(
             data_series=[self.get_right_job_data(), self.get_right_task_data()],
             left_axis=ChartAxis(labels=[], show_labels=False),
-            bottom_axis=ChartAxis(labels=self.get_right_labels(), ), min_x=0, max_x=7, bgcolor="#0b1224",
+            bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TRENT_DAY, bgcolor="#0b1224",
             # border=ft.border.all(1, "#254b80"),
             height=220
         )
@@ -144,22 +148,22 @@ class Center:
 
         return LineChartData(
             points=[
-                LineChartDataPoint(idx, value, tooltip=str(value)) for idx, value in enumerate(data.values())
+                LineChartDataPoint(idx, value, tooltip=f'工作: {value}') for idx, value in enumerate(data.values())
             ],
-            color="#22c55e",
+            color=COLOR_JOB_FINISH,
             stroke_width=3,
             point=True,
-            curved=True
+            curved=True,
         )
 
     def get_right_task_data(self):
-        data = TaskService.finish_trend()
+        data = TaskService.finish_trend(TRENT_DAY)
 
         return LineChartData(
             points=[
-                LineChartDataPoint(idx, value, tooltip=str(value)) for idx, value in enumerate(data.values())
+                LineChartDataPoint(idx, value, tooltip=f'任务: {value}') for idx, value in enumerate(data.values())
             ],
-            color="#ef4444",
+            color=COLOR_TASK_FINISH,
             stroke_width=3,
             point=True,
             curved=True
@@ -167,9 +171,10 @@ class Center:
 
     def get_right_labels(self):
         labels = []
-        data = JobService.finish_trend()
+        data = JobService.finish_trend(days=TRENT_DAY)
 
         for idx, day in enumerate(data.keys()):
+            day = day.split("-")[-1]  # 取日
             l = ChartAxisLabel(value=idx, label=ft.Text(day, color=COLOR_TEXT, size=11))
             labels.append(l)
 
@@ -180,7 +185,9 @@ class Bottom:
     def build(self):
         return ft.Row([  # 左下角：最新更新工作任务
             ft.Container(
-                width=420, padding=16,
+                width=420,
+                height=300,
+                padding=16,
                 border=ft.Border(
                     left=ft.BorderSide(1, "#22d3ee88"),
                     right=ft.BorderSide(1, "#22d3ee88"),
@@ -192,7 +199,9 @@ class Bottom:
                 content=self.build_left()
             ),
             ft.Container(
-                expand=True, padding=16,
+                expand=True,
+                height=300,
+                padding=16,
                 border=ft.Border(
                     left=ft.BorderSide(1, "#22d3ee88"),
                     right=ft.BorderSide(1, "#22d3ee88"),
@@ -212,22 +221,29 @@ class Bottom:
             ft.ListView(
                 controls=[self.build_latest_job_row(job) for job in JobService.latest()],
                 spacing=4,
-                height=320
             )
         ])
 
     def build_latest_job_row(self, job: Job):
         return ft.Container(
             data=job,
-            on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}"), padding=10,
+            on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}"),
+            padding=10,
             border_radius=4,  # hover_color="#1e293b",
             content=ft.Row([  # ft.Container(width=10, height=10, bgcolor=item["status_color"], border_radius=99),
                 ft.Container(width=10, height=10, border_radius=99), ft.Container(width=10),
                 ft.Column(
                     [
-                        ft.Text(job.name, color="#22d3ee", size=14, weight=ft.FontWeight.W_500),
                         ft.Text(
-                            f"{job.type} | {job.updated_time} | {job.updated_content}",
+                            job.name,
+                            color="#22d3ee",
+                            size=14,
+                            weight=ft.FontWeight.W_500,
+                            max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS
+                        ),
+                        ft.Text(
+                            f"{job.type} | {datetime_2_date_str(job.updated_time, DATE_TIME_FMT)} | {job.updated_content}",
                             size=11,
                             color="#94a3b8"),
                     ],
@@ -243,35 +259,46 @@ class Bottom:
         return ft.Column([
             ft.Text("即将逾期工作", size=16, color="#22d3ee"),
             ft.Row([
-                ft.Text("名称", size=12, color="#94a3b8", width=160),
-                ft.Text("类型", size=12, color="#94a3b8", width=180),
-                ft.Text("优先级", size=12, color="#94a3b8", width=80),
-                ft.Text("结束时间", size=12, color="#94a3b8", width=140),
-                ft.Text("剩余时长", size=12, color="#94a3b8", width=100),
-                ft.Text("状态", size=12, color="#94a3b8", width=100),
+                ft.Text("名称", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=160),
+                ft.Text("类型", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=180),
+                ft.Text("优先级", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=80),
+                ft.Text("结束时间", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=140),
+                ft.Text("剩余时长", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=100),
+                ft.Text("状态", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=100),
                 ft.Container(width=20),
             ]),
             ft.ListView(
                 controls=[self.build_expire_job(job) for job in JobService.expire()],
                 spacing=6,
-                height=280
             )
         ])
 
     def build_expire_job(self, job: Job):
-        # warn_color = "#ef4444" if item["warn"] else "#f97316"
-        warn_color = "#ef4444"
+        day = (job.end_time.date() - datetime.date.today()).days
+        if day <= 0:
+            text, color = f"已逾期{-day}天", COLOR_DANGER
+        elif day <= 3:
+            text, color = str(day), COLOR_WARN
+        else:
+            text, color = str(day), COLOR_SAFE
+
         return ft.Row([
-            ft.Text(job.name, size=12, color="#cbd5e1", width=180),
-            ft.Text(job.type, size=12, color="#cbd5e1", width=160),
-            ft.Text(job.priority, size=12, color="#cbd5e1", width=80),
-            ft.Text(job.end_time, size=12, color="#cbd5e1", width=140),
-            ft.Text(
-                (job.end_time.date() - datetime.date.today()).days,
-                size=12,
-                color=warn_color,
-                width=100
+            ft.TextButton(
+                job.name,
+                width=160,
+                on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}")
             ),
-            ft.Text(job.status, size=12, color="#cbd5e1", width=100),
-            # ft.Icon(ft.Icons.WARNING_AMBER, size=14, color=warn_color) if item["warn"] else ft.Container(width=20),
+            ft.Text(job.type, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=180),
+            ft.Text(job.priority, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=80),
+            ft.Text(job.end_time.strftime("%Y-%m-%d"), size=12, color="#cbd5e1", text_align=TextAlign.CENTER,
+                    width=140),
+            ft.Text(
+                text,
+                size=12,
+                color=color,
+                width=100,
+                text_align=TextAlign.CENTER,
+            ),
+            ft.Text(job.status, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=100),
+            ft.Icon(ft.Icons.WARNING_AMBER, size=14, color=COLOR_WARN) if day < 3 else ft.Container(width=20),
         ])

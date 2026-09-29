@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass, field
 from typing import TypeVar, Generic, Optional
 
@@ -14,4 +15,4 @@ class Pagination(Generic[T]):
 
     @property
     def total_page(self) -> int:
-        return self.total // self.page_size
+        return math.ceil(self.total/self.page_size)
