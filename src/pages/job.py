@@ -1,12 +1,14 @@
 import datetime
 import logging
+from typing import Callable
 
 import flet as ft
 from flet_charts import *
 
+from src.common.decorate import catch_error
 from src.common.util import utc_2_naive_datetime, datetime_2_date_str
 from src.constant import DATE_FMT
-from src.data.model import Task
+from src.data.model import Task, Job
 from src.data.service import JobService, LogService, TaskService
 
 logger = logging.getLogger(__name__)
@@ -21,37 +23,36 @@ COLOR_SUCCESS = "#22c55e"
 COLOR_WARN = "#f59e0b"
 COLOR_DANGER = "#ef4444"
 BORDER_RADIUS = 10
-#
-
-
-#
-BG_PANEL = "#0f172a"
-COLOR_PRIMARY = "#60a5fa"
-COLOR_TEXT = "#cbd5e1"
-BORDER_RADIUS = 10
 
 
 @ft.component
+@catch_error
 def job_view():
     params = ft.use_route_params()
-    job = JobService.get(int(params['job_id']))
+    job_id = int(params['job_id'])
+    logger.info(f"查看工作: {job_id}")
+    if not job_id:
+        return ft.Text("请在工作列表中选择", color=COLOR_WARN)
+
+    job = JobService.get(job_id)
+    refresh_flag, set_refresh_flag = ft.use_state(True)
 
     return ft.Row(
         controls=[
             Left(job).build(),
-            ft.Container(width=16),
+            ft.Container(width=5),
 
-            Center(job).build(),
-            ft.Container(width=16),
+            Center(job=job, refresh_flag=refresh_flag, set_refresh_flag=set_refresh_flag).build(),
+            ft.Container(width=5),
 
             Right(job).build(),
         ],
-        expand=True
+        vertical_alignment=ft.CrossAxisAlignment.START
     )
 
 
 class Left:
-    def __init__(self, job):
+    def __init__(self, job: Job):
         self.job = job
 
     def build(self):
@@ -66,7 +67,7 @@ class Left:
                     ft.Text("工作详情", color=COLOR_PRIMARY, size=16, weight=ft.FontWeight.BOLD),
                     ft.Divider(color="#254b80", height=1),
                     ft.Container(height=12),
-                    ft.Text(f"工作名称: {self.job.name}", color=COLOR_TEXT, size=13),
+                    ft.Text(f"名称: {self.job.name}", color=COLOR_TEXT, size=13),
                     ft.Text(f"描述: {self.job.description}", color=COLOR_TEXT, size=13),
                     ft.Container(height=6),
                     ft.Text(f"优先级: {self.job.priority}", color=COLOR_TEXT, size=13),
@@ -75,26 +76,25 @@ class Left:
                     ft.Text(f"结束时间: {datetime_2_date_str(self.job.end_time)}", color=COLOR_TEXT, size=13),
                     ft.Container(height=10),
                     ft.Row(
-                        alignment=ft.MainAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.START,
                         controls=[
                             ft.Text("进度: ", color=COLOR_TEXT, size=13),
-                            ft.Stack(
-                                [
-                                    ft.ProgressRing(value=self.job.progress / 100, width=60, height=60, stroke_width=8,
-                                                    color=COLOR_PRIMARY,
-                                                    bgcolor="#1e293b"),
-                                    ft.Container(
-                                        content=ft.Text(f"{self.job.progress}%", color=COLOR_PRIMARY, size=18),
-                                        # alignment=ft.MainAxisAlignment.CENTER,
-                                        width=60, height=60
-                                    )
-                                ]
-                            )
+                            ft.Stack([
+                                ft.ProgressBar(
+                                    bar_height=12, width=180,
+                                    value=self.job.progress/100,
+                                    bgcolor=COLOR_TEXT,
+                                    color=COLOR_SUCCESS if self.job.progress == 100 else COLOR_PRIMARY,
+                                ),
+                                ft.Text(f"{self.job.progress}%")
+                            ],
+                                width=180,
+                                alignment=ft.Alignment.CENTER
+                            ),
                         ]
                     ),
                     ft.Text(f"状态: {self.job.status}", color=COLOR_SUCCESS, size=14, text_align=ft.TextAlign.CENTER),
                     ft.Container(height=8),
-                    # ft.ProgressBar(value=0.62, color=COLOR_PRIMARY, bgcolor="#1e293b", height=6),
                 ],
                 spacing=4
             )
@@ -102,21 +102,19 @@ class Left:
 
 
 class Center:
-    def __init__(self, job):
+    def __init__(self, job: Job, refresh_flag: bool, set_refresh_flag: Callable):
         self.job = job
-        self.refresh_flag, self.set_refresh_flag = ft.use_state(True)
-        self.tasks = ft.use_memo(lambda: TaskService.query(), [self.refresh_flag])
+        self.refresh_flag = refresh_flag
+        self.set_refresh_flag = set_refresh_flag
+
+        self.job = job
+        self.tasks = TaskService.query(job.id)
 
         today = datetime.date.today()
         today_7 = today + datetime.timedelta(days=7)
 
         self.name_field = ft.TextField(label="任务名称", color=COLOR_TEXT)
         self.desc_field = ft.TextField(label="描述", color=COLOR_TEXT)
-        self.priority_field = ft.Dropdown(
-            label="优先级",
-            color=COLOR_TEXT,
-            options=[ft.dropdown.Option("高"), ft.dropdown.Option("高"), ft.dropdown.Option("低")]
-        )
         self.status_field = ft.Dropdown(
             label="状态",
             color=COLOR_TEXT,
@@ -167,7 +165,6 @@ class Center:
                 job_id=self.job.id,
                 name=self.name_field.value,
                 description=self.desc_field.value,
-                priority=self.priority_field.value,
                 status=self.status_field.value,
                 start_time=utc_2_naive_datetime(self.picker.start_value),
                 end_time=utc_2_naive_datetime(self.picker.end_value),
@@ -181,7 +178,6 @@ class Center:
             content=ft.Column([
                 self.name_field,
                 self.desc_field,
-                self.priority_field,
                 self.status_field,
                 self.picker_button
             ], tight=True),
@@ -193,7 +189,7 @@ class Center:
         return ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[
-                ft.Text("任务与计划", color=COLOR_PRIMARY, size=16, weight=ft.FontWeight.BOLD),
+                ft.Text("任务信息", color=COLOR_PRIMARY, size=16, weight=ft.FontWeight.BOLD),
                 ft.Button(
                     "新建任务",
                     bgcolor=COLOR_PRIMARY,
@@ -207,7 +203,7 @@ class Center:
     def submit_update_task(self, task: Task):
         TaskService().update(
             id=task.id, name=self.name_field.value, description=self.desc_field.value,
-            priority=self.priority_field.value, status=self.status_field.value,
+            status=self.status_field.value,
             start_time=self.picker.start_value, end_time=self.picker.end_value,
         )
         JobService().update(id=self.job.id, updated_content='更新任务')
@@ -221,7 +217,6 @@ class Center:
             content=ft.Column([
                 self.name_field,
                 self.desc_field,
-                self.priority_field,
                 self.status_field,
                 self.picker_button
             ], tight=True),
@@ -259,7 +254,6 @@ class Center:
                     cells=[
                         ft.DataCell(ft.Text(task.id, color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(task.name, color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(task.priority, color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(task.status, color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(datetime_2_date_str(task.start_time), color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(datetime_2_date_str(task.end_time), color=COLOR_TEXT)),
@@ -288,7 +282,6 @@ class Center:
             columns=[
                 ft.DataColumn(label=ft.Text("ID", color=COLOR_TEXT)),
                 ft.DataColumn(label=ft.Text("任务", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("优先级", color=COLOR_TEXT)),
                 ft.DataColumn(label=ft.Text("状态", color=COLOR_TEXT)),
                 ft.DataColumn(label=ft.Text("开始时间", color=COLOR_TEXT)),
                 ft.DataColumn(label=ft.Text("结束时间", color=COLOR_TEXT)),

@@ -1,7 +1,7 @@
 import flet as ft
 
 
-class HeaderBuilder:
+class Header:
     def get_active_key(self):
         current_route = ft.context.page.route
 
@@ -52,7 +52,7 @@ class HeaderBuilder:
         )
 
 
-    def generate(self):
+    def build(self):
         return ft.Container(
             bgcolor="#111834",
             padding=ft.Padding(16, 10, 16, 10),
@@ -65,7 +65,7 @@ class HeaderBuilder:
                     ft.Container(width=24),
                     self.build_tab("工作列表", "/jobs", "jobs"),
                     ft.Container(width=24),
-                    self.build_tab("工作详情", "/job/1", "job"),
+                    # self.build_tab("工作详情", "/job/0", "job"),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=8,
@@ -77,7 +77,7 @@ def layout():
     outlet = ft.use_route_outlet()
     return ft.Column(
         [
-            HeaderBuilder().generate(),
+            Header().build(),
             ft.Container(content=outlet, padding=20),
             ft.Text("Footer - (c) 2026", text_align=ft.TextAlign.CENTER),
         ],

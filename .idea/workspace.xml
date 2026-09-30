@@ -5,11 +5,13 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="更改">
-      <change afterPath="$PROJECT_DIR$/src/pages/common.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/common/pagination.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/common/pagination.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/constant.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/model.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/job.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/jobs.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/pages/overview.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/overview.py" afterDir="false" />
     </list>
@@ -121,7 +123,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/src/data/service.py</url>
-          <line>229</line>
+          <line>243</line>
           <option name="timeStamp" value="7" />
         </line-breakpoint>
       </breakpoints>

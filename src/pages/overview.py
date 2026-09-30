@@ -1,13 +1,13 @@
 import datetime
 
+import flet as ft
 from flet import TextAlign
 from flet_charts import *
 
 from src.common.util import datetime_2_date_str
-from src.constant import Status, DATE_TIME_FMT
+from src.constant import *
 from src.data.model import Job
 from src.data.service import JobService, TaskService
-from src.pages.common import *
 from src.pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
 
 
@@ -78,15 +78,11 @@ class Center:
             ft.Container(
                 expand=True,
                 bgcolor=BG_PANEL,
+                height=330,
                 border_radius=BORDER_RADIUS,
                 padding=20,
                 # border=ft.border.all(1, "#254b80"),
-                content=ft.Column(
-                    controls=[
-                        ft.Text("工作进展", size=16, color="#22d3ee"),
-                        ft.Container(height=30),  # 占位,
-                        self.build_right()
-                    ])
+                content=self.build_right(),
             )
         ], spacing=16)
 
@@ -135,13 +131,17 @@ class Center:
 
     # 右边
     def build_right(self):
-        return LineChart(
-            data_series=[self.get_right_job_data(), self.get_right_task_data()],
-            left_axis=ChartAxis(labels=[], show_labels=False),
-            bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TRENT_DAY, bgcolor="#0b1224",
-            # border=ft.border.all(1, "#254b80"),
-            height=220
-        )
+        return ft.Column(
+            controls=[
+                ft.Text("工作进展", size=16, color="#22d3ee"),
+                LineChart(
+                    data_series=[self.get_right_job_data(), self.get_right_task_data()],
+                    left_axis=ChartAxis(labels=[], show_labels=False),
+                    bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TRENT_DAY, bgcolor="#0b1224",
+                    # border=ft.border.all(1, "#254b80"),
+                    height=220
+                )
+            ])
 
     def get_right_job_data(self):
         data = JobService.finish_trend()
@@ -275,7 +275,7 @@ class Bottom:
 
     def build_expire_job(self, job: Job):
         day = (job.end_time.date() - datetime.date.today()).days
-        if day <= 0:
+        if day < 0:
             text, color = f"已逾期{-day}天", COLOR_DANGER
         elif day <= 3:
             text, color = str(day), COLOR_WARN

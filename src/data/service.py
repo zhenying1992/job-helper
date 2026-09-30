@@ -6,9 +6,8 @@ from peewee import SQL
 from src.common.pagination import Pagination
 from src.common.util import datetime_2_date_str
 from src.config import DEFAULT_JOB_END_DAY
-from src.constant import Priority, Status
+from src.constant import *
 from src.data.model import Job, Task, Log
-from src.pages.common import TRENT_DAY
 
 
 class JobService:
@@ -24,6 +23,7 @@ class JobService:
         if status:
             q = q.where(Job.status == status)
 
+        q = q.order_by(Job.id.desc())
         pagination.total = q.count()
         pagination.data = list(q.paginate(pagination.current, pagination.page_size))
         return pagination
@@ -77,6 +77,17 @@ class JobService:
     @staticmethod
     def delete(id: int):
         Job.delete_by_id(id)
+
+    @staticmethod
+    def sync_progress(id: int):
+        tasks = Task.select().where(Task.job == id)
+        if not tasks:
+            progress = 0
+        else:
+            done_tasks = [task for task in tasks if task.status == Status.FINISHED]
+            progress = int(len(done_tasks) / len(tasks) * 100)
+
+        Job.update(progress=progress).where(Job.id == id).execute()
 
     @staticmethod
     def latest() -> list[Job]:
@@ -135,8 +146,8 @@ class JobService:
 
 class TaskService:
     @staticmethod
-    def query() -> list[Task]:
-        return list(Task.select())
+    def query(job_id: int) -> list[Task]:
+        return list(Task.select().where(Task.job == job_id))
 
     @staticmethod
     def create(job_id: int, name: str, description: str, priority: str = Priority.LOW, status: str = Status.NOT_START,
@@ -149,6 +160,7 @@ class TaskService:
         task = Task(job_id=job_id, name=name, description=description, priority=priority, status=status,
                     start_time=start_time, end_time=end_time, )
         task.save()
+        JobService.sync_progress(job_id)
         return task
 
     @staticmethod
@@ -156,7 +168,7 @@ class TaskService:
         return Task.get(Task.id == id)
 
     @staticmethod
-    def update(id: int, name: Optional[str] = None, description: Optional[str] = None, priority: Optional[str] = None,
+    def update(id: int, name: Optional[str] = None, description: Optional[str] = None,
                status: Optional[str] = None, start_time: date = None, end_time: date = None, ):
 
         task = TaskService.get(id)
@@ -165,9 +177,6 @@ class TaskService:
 
         if description is not None:
             task.description = description
-
-        if priority is not None:
-            task.priority = priority
 
         if status is not None:
             task.status = status
@@ -180,9 +189,14 @@ class TaskService:
 
         task.save()
 
+        JobService.sync_progress(task.job.id)
+
+
     @staticmethod
     def delete(id: int):
+        task = TaskService.get(id)
         Task.delete_by_id(id)
+        JobService.sync_progress(task.job.id)
 
     @staticmethod
     def total(status: Optional[str] = None) -> tuple[int, int]:

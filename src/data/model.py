@@ -11,8 +11,8 @@ class Job(BaseModel):
     type = CharField()
     name = CharField(unique=True)
     description = CharField()
-    progress = IntegerField()
-    priority = CharField()
+    progress = IntegerField(default=0)
+    priority = IntegerField()
     status = CharField()
     start_time = DateTimeField()
     end_time = DateTimeField()
@@ -28,21 +28,18 @@ class Job(BaseModel):
             (('end_time',), False),
         )
 
-
 class Task(BaseModel):
     id = AutoField()
     job = ForeignKeyField(Job, backref='tasks', index=True)
     name = CharField()
     description = CharField()
-    priority = CharField()
     status = CharField()
     start_time = DateTimeField()
     end_time = DateTimeField()
 
     class Meta:
         indexes = (
-            (('job_id',), False),
-            (('name',), True),
+            (('job_id', 'name'), True),
         )
 
 class Log(BaseModel):

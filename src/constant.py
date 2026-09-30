@@ -1,4 +1,12 @@
 
+# 数据
+class JobType:
+    COMMON = '通用工作'
+
+    @classmethod
+    def list(cls):
+        return [cls.COMMON]
+
 DATE_FMT = '%Y-%m-%d'
 DATE_TIME_FMT = '%Y-%m-%d %H:%M:%S'
 
@@ -19,4 +27,16 @@ class Priority:
 
     @classmethod
     def list(cls):
-        return [cls.LOW, cls.MEDIUM, cls.HIGH]
+        return [cls.HIGH, cls.MEDIUM, cls.LOW]
+
+
+# 颜色
+COLOR_DANGER = "#ff4757"
+COLOR_WARN ="#ffa502"
+COLOR_SAFE = "#2ed573"
+
+COLOR_JOB_FINISH = "#26f0d0"
+COLOR_TASK_FINISH = "#38a8ff"
+
+#
+TRENT_DAY = 30
