@@ -7,7 +7,7 @@ from flet_charts import *
 
 from src.common.decorate import catch_error
 from src.common.util import utc_2_naive_datetime, datetime_2_date_str
-from src.constant import DATE_FMT
+from src.constant import DATE_FMT, Status, DATE_TIME_FMT
 from src.data.model import Task, Job
 from src.data.service import JobService, LogService, TaskService
 
@@ -82,7 +82,7 @@ class Left:
                             ft.Stack([
                                 ft.ProgressBar(
                                     bar_height=12, width=180,
-                                    value=self.job.progress/100,
+                                    value=self.job.progress / 100,
                                     bgcolor=COLOR_TEXT,
                                     color=COLOR_SUCCESS if self.job.progress == 100 else COLOR_PRIMARY,
                                 ),
@@ -118,7 +118,8 @@ class Center:
         self.status_field = ft.Dropdown(
             label="状态",
             color=COLOR_TEXT,
-            options=[ft.dropdown.Option("待开始"), ft.dropdown.Option("进行中"), ft.dropdown.Option("已完成")]
+            options=[ft.DropdownOption(i) for i in Status.list()],
+            value=Status.NOT_START,
         )
         self.picker = ft.DateRangePicker(
             locale=ft.Locale("zh", "Hans"),
@@ -147,12 +148,12 @@ class Center:
                 controls=[
                     self.build_header(),
                     ft.Divider(color="#254b80", height=1),
-                    ft.Container(height=12),
 
                     self.build_table(),
-                    ft.Container(height=16),
 
+                    ft.Container(height=16),
                     ft.Text("时间计划", color=COLOR_PRIMARY, size=16, weight=ft.FontWeight.BOLD),
+                    ft.Divider(color="#254b80", height=1),
                     self.build_gantt(),
                 ],
                 expand=True
@@ -275,19 +276,28 @@ class Center:
                 )
             )
 
-        return ft.DataTable(
-            border_radius=BORDER_RADIUS,
-            bgcolor="#12182e",
-            heading_row_color=BG_HEADER,
-            columns=[
-                ft.DataColumn(label=ft.Text("ID", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("任务", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("状态", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("开始时间", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("结束时间", color=COLOR_TEXT)),
-                ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
-            ],
-            rows=rows
+        return ft.Container(
+            height=350,
+            expand=True,
+            content=ft.Column(
+                [ft.DataTable(
+                    border_radius=BORDER_RADIUS,
+                    bgcolor="#12182e",
+                    heading_row_color=BG_HEADER,
+                    columns=[
+                        ft.DataColumn(label=ft.Text("ID", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("任务", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("状态", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("开始时间", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("结束时间", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
+                    ],
+                    rows=rows,
+                    # expand=True,
+                )],
+                scroll=ft.ScrollMode.AUTO,  # 超出高度自动出现滚动条
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # ✅关键！子控件横向拉伸填满Column宽度
+            )
         )
 
     # 甘特图
@@ -330,7 +340,7 @@ class Center:
             max_x=7,
             bgcolor="#0b1224",
             # border=ft.border.all(1, "#254b80"),
-            height=220
+            height=300
         )
 
 
@@ -384,7 +394,7 @@ class Right:
                         ft.Container(width=16),
                         ft.Column(
                             controls=[
-                                ft.Text(log.created_time, color="#60a5fa", size=13),
+                                ft.Text(datetime_2_date_str(log.created_time, fmt=DATE_TIME_FMT), color="#60a5fa", size=13),
                                 ft.Text(f"动作：{log.name}", color=COLOR_TEXT, size=13),
                                 ft.Text(f"内容：{log.content}", color=COLOR_TEXT, size=13),
                                 ft.Container(height=12),
@@ -397,50 +407,60 @@ class Right:
             )
 
         return ft.Container(
-            width=340,
+            width=250,
+            height=800,
             bgcolor=BG_PANEL,
             border_radius=BORDER_RADIUS,
             padding=20,
             # border=ft.border.all(1, "#254b80"),
             content=ft.Column(
                 controls=[
-                    ft.Text("审计日志", color=COLOR_PRIMARY, size=18, weight=ft.FontWeight.BOLD),
-                    ft.Divider(color="#254b80", height=1),
-                    ft.Container(height=16),
-                    # Stack：左边竖线 + 日志列表
-                    ft.Stack(
-                        controls=[
-                            # 时间线竖线
-                            ft.Container(
-                                left=4,
-                                top=0,
-                                width=2,
-                                height=320,
-                                bgcolor="#254b80",
-                            ),
-                            ft.Container(
-                                # padding=ft.padding.only(left=8),
-                                content=ft.Column(
-                                    controls=log_items,
-                                    spacing=0
-                                )
-                            )
-                        ]
-                    ),
-                    ft.Container(height=20),
                     ft.Row(
                         controls=[
+                            ft.Text("审计日志", color=COLOR_PRIMARY, size=18, weight=ft.FontWeight.BOLD),
                             ft.Button(
-                                "新增审计日志",
+                                "新增",
                                 bgcolor="#3b82f6",
                                 color="white",
                                 style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
                                 on_click=lambda e: ft.context.page.show_dialog(self.build_add_audit_log_dialog()),
-                            )
+                            ),
                         ],
-                        spacing=12
-                    )
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Divider(color="#254b80", height=1),
+                    ft.Container(height=16),
+
+                    ft.Container(
+                        expand=True,
+                        content=ft.Column(
+                            controls=[
+                                # Stack：左边竖线 + 日志列表
+                                ft.Stack(
+                                    controls=[
+                                        # 时间线竖线
+                                        ft.Container(
+                                            left=4,
+                                            top=0,
+                                            width=2,
+                                            height=1320,
+                                            bgcolor="#254b80",
+                                        ),
+                                        ft.Container(
+                                            # padding=ft.padding.only(left=8),
+                                            content=ft.Column(
+                                                controls=log_items,
+                                                spacing=0
+                                            )
+                                        )
+                                    ]
+                                ),
+                            ],
+                            scroll=ft.ScrollMode.AUTO,  # 超出高度自动出现滚动条
+                        )
+                    ),
                 ],
-                spacing=0
+                spacing=0,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             )
         )

@@ -139,7 +139,7 @@ class Center:
                     left_axis=ChartAxis(labels=[], show_labels=False),
                     bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TRENT_DAY, bgcolor="#0b1224",
                     # border=ft.border.all(1, "#254b80"),
-                    height=220
+                    height=250
                 )
             ])
 
