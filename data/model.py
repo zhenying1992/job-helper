@@ -3,7 +3,7 @@ from datetime import datetime
 
 from peewee import AutoField, CharField, DateTimeField, ForeignKeyField, IntegerField
 
-from src.data.db import BaseModel
+from data.db import BaseModel
 
 
 class Job(BaseModel):

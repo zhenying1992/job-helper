@@ -5,14 +5,31 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="更改">
-      <change afterPath="$PROJECT_DIR$/_pubspec.yaml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/deploy/mac/pack.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/requirements" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/pages/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/_pubspec.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/mac/entitlements.plist" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/deploy/mac/pack.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/assets/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/assets/splash_android.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/splash_android.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/common/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/common/decorate.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/decorate.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/common/pagination.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/pagination.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/common/util.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/util.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/constant.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/common.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/init.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/init.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/jobs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/overview.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/overview.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/pages/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/urls.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -69,10 +86,11 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/src/pages" />
     </key>
   </component>
-  <component name="RunManager" selected="Shell Script.pack.sh">
+  <component name="RunManager" selected="Python.main">
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="job-helper" />
       <option name="ENV_FILES" value="" />
@@ -82,11 +100,11 @@
         <env name="PYTHONUNBUFFERED" value="1" />
       </envs>
       <option name="SDK_HOME" value="" />
-      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/src" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
       <option name="IS_MODULE_SDK" value="true" />
       <option name="ADD_CONTENT_ROOTS" value="true" />
       <option name="ADD_SOURCE_ROOTS" value="true" />
-      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/src/main.py" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
       <option name="PARAMETERS" value="" />
       <option name="SHOW_COMMAND_LINE" value="false" />
       <option name="EMULATE_TERMINAL" value="false" />
@@ -110,10 +128,14 @@
       <envs />
       <method v="2" />
     </configuration>
+    <list>
+      <item itemvalue="Python.main" />
+      <item itemvalue="Shell Script.pack.sh" />
+    </list>
     <recent_temporary>
       <list>
-        <item itemvalue="Shell Script.pack.sh" />
         <item itemvalue="Python.main" />
+        <item itemvalue="Shell Script.pack.sh" />
       </list>
     </recent_temporary>
   </component>
@@ -138,7 +160,7 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/src/data/service.py</url>
+          <url>file://$PROJECT_DIR$/data/service.py</url>
           <line>243</line>
           <option name="timeStamp" value="7" />
         </line-breakpoint>

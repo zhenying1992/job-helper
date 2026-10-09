@@ -3,8 +3,8 @@ from pathlib import Path
 
 import flet as ft
 
-from src.common.util import can_access_dir
-from src.config import save_app_config, get_work_dir
+from common.util import can_access_dir
+from config import save_app_config, get_work_dir
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,8 @@ class InitView:
         self.page.pop_dialog()
 
         logger.info("开始启动")
-        from src.data.db import init_db
-        from src.pages.urls import app
+        from data import init_db
+        from pages.urls import app
 
         init_db()
         self.page.render(app)

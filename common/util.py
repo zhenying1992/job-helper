@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from src.constant import DATE_FMT
+from constant import DATE_FMT
 
 
 def utc_2_naive_datetime(utc_dt: datetime) -> datetime:

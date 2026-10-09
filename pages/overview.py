@@ -4,11 +4,11 @@ import flet as ft
 from flet import TextAlign
 from flet_charts import *
 
-from src.common.util import datetime_2_date_str
-from src.constant import *
-from src.data.model import Job
-from src.data.service import JobService, TaskService
-from src.pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
+from common.util import datetime_2_date_str
+from constant import *
+from data.model import Job
+from data.service import JobService, TaskService
+from pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
 
 
 @ft.component

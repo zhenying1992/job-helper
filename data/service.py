@@ -3,11 +3,11 @@ from typing import Optional
 
 from peewee import SQL
 
-from src.common.pagination import Pagination
-from src.common.util import datetime_2_date_str
-from src.config import DEFAULT_JOB_END_DAY
-from src.constant import *
-from src.data.model import Job, Task, Log
+from common.pagination import Pagination
+from common.util import datetime_2_date_str
+from config import DEFAULT_JOB_END_DAY
+from constant import *
+from data.model import Job, Task, Log
 
 
 class JobService:

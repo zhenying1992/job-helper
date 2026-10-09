@@ -5,11 +5,11 @@ from typing import Callable
 import flet as ft
 from flet_charts import *
 
-from src.common.decorate import catch_error
-from src.common.util import utc_2_naive_datetime, datetime_2_date_str
-from src.constant import DATE_FMT, Status, DATE_TIME_FMT
-from src.data.model import Task, Job
-from src.data.service import JobService, LogService, TaskService
+from common.decorate import catch_error
+from common.util import utc_2_naive_datetime, datetime_2_date_str
+from constant import DATE_FMT, Status, DATE_TIME_FMT
+from data.model import Task, Job
+from data.service import JobService, LogService, TaskService
 
 logger = logging.getLogger(__name__)
 

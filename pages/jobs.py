@@ -4,12 +4,12 @@ from typing import Callable
 import flet as ft
 from flet import MainAxisAlignment
 
-from src.common.decorate import catch_error
-from src.common.pagination import Pagination
-from src.common.util import utc_2_naive_datetime, datetime_2_date_str
-from src.constant import Status, Priority, JobType
-from src.data.model import Job
-from src.data.service import JobService
+from common.decorate import catch_error
+from common.pagination import Pagination
+from common.util import utc_2_naive_datetime, datetime_2_date_str
+from constant import Status, Priority, JobType
+from data.model import Job
+from data.service import JobService
 
 
 @ft.component

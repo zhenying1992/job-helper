@@ -1,9 +1,9 @@
 import flet as ft
 
-from src.pages import layout
-from src.pages.overview import overview
-from src.pages.job import job_view
-from src.pages.jobs import jobs_view
+from pages import layout
+from pages.overview import overview
+from pages.job import job_view
+from pages.jobs import jobs_view
 
 
 def get_urls():
