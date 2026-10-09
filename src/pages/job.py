@@ -363,7 +363,7 @@ class Right:
             self.set_refresh_flag(not self.refresh_flag)
 
         return ft.AlertDialog(
-            title=ft.Text("添加审计", color=COLOR_PRIMARY),
+            title=ft.Text("添加记录", color=COLOR_PRIMARY),
             content=ft.Column(
                 [
                     text_field,
@@ -417,7 +417,7 @@ class Right:
                 controls=[
                     ft.Row(
                         controls=[
-                            ft.Text("审计日志", color=COLOR_PRIMARY, size=18, weight=ft.FontWeight.BOLD),
+                            ft.Text("操作日志", color=COLOR_PRIMARY, size=18, weight=ft.FontWeight.BOLD),
                             ft.Button(
                                 "新增",
                                 bgcolor="#3b82f6",

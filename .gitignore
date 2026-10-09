@@ -19,6 +19,7 @@ env/
 .flet/
 build/
 storage/
+dist/
 
 # IDE
 .idea/
@@ -29,3 +30,5 @@ storage/
 
 src/db.sqlite3
 src/sqlite.db
+
+requirements

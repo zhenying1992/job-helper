@@ -1,0 +1,13 @@
+name: job_helper
+description: JobHelper Flet app
+version: 1.0.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  connectivity_plus: 6.0.0
+
+dependency_overrides:
+  connectivity_plus: 6.0.3
+  jni: 1.1.0

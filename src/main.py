@@ -1,8 +1,8 @@
 
 import flet as ft
 
-from src.config import get_work_dir
-from src.pages.init import InitView
+from config import get_work_dir
+from pages.init import InitView
 import logging
 
 
