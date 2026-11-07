@@ -11,6 +11,8 @@ class Header:
             active_key = "jobs"
         elif current_route.startswith("/job/"):
             active_key = "job"
+        elif current_route.startswith("/setting"):
+            active_key = "setting"
         else:
             active_key = "overview"
 
@@ -65,6 +67,7 @@ class Header:
                     ft.Container(width=24),
                     self.build_tab("工作列表", "/jobs", "jobs"),
                     ft.Container(width=24),
+                    self.build_tab("配置中心", "/setting", "setting"),
                     # self.build_tab("工作详情", "/job/0", "job"),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,

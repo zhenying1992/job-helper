@@ -19,7 +19,7 @@ def main(page: ft.Page):
         page.show_dialog(InitView(page)())
     else:
         logger.info("非首次启动，跳过目录配置")
-        from data import init_db
+        from data.db import init_db
         from pages.urls import app
 
         init_db()

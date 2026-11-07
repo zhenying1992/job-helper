@@ -4,6 +4,7 @@ from typing import Callable
 
 import flet as ft
 from flet_charts import *
+import flet_dropzone as ftd
 
 from common.decorate import catch_error
 from common.util import utc_2_naive_datetime, datetime_2_date_str
@@ -56,6 +57,14 @@ class Left:
         self.job = job
 
     def build(self):
+        return ft.Column(
+            controls=[
+                self.build_top(),
+                self.build_bottom(),
+            ]
+        )
+
+    def build_top(self):
         return ft.Container(
             width=280,
             bgcolor=BG_PANEL,
@@ -97,6 +106,21 @@ class Left:
                     ft.Container(height=8),
                 ],
                 spacing=4
+            )
+        )
+
+    def build_bottom(self):
+        return ft.Container(
+            ftd.Dropzone(
+                content=ft.Container(
+                    ft.Text("Drop here!"),
+                    height=500,
+                    alignment=ft.Alignment.CENTER,
+                    bgcolor="red",
+                ),
+                on_dropped=lambda e: print(f"Dropped: {e.files}"),
+                on_entered=lambda e: print("Entered"),
+                on_exited=lambda e: print("Exited"),
             )
         )
 

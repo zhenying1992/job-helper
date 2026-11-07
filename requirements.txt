@@ -12,6 +12,7 @@ flet==1.0.3
 flet-charts==1.0.3
 flet-cli==1.0.3
 flet-desktop==1.0.3
+flet-dropzone==0.4.0
 flet-platform-assets==1.0.3
 h11==0.16.0
 httpcore==1.0.9

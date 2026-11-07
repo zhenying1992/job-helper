@@ -5,31 +5,20 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="更改">
+      <change afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/setting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/_pubspec.yaml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy/mac/entitlements.plist" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/deploy/mac/pack.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assets/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/assets/splash_android.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/splash_android.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/common/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/common/decorate.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/decorate.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/common/pagination.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/pagination.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/common/util.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/util.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/constant.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/db.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/common.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/init.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/init.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/job.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/jobs.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/overview.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/overview.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/pages/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/assets/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/icon.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/init.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/init.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/urls.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -74,23 +63,48 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Makefile Target.build.executor": "Run",
+    "Makefile Target.run-restart.executor": "Run",
+    "Makefile Target.run.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.main.executor": "Run",
+    "Python.main.executor": "Debug",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
     "Shell Script.pack.sh.executor": "Run",
     "git-widget-placeholder": "main",
-    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
+    "last_opened_file_path": "/Users/hou/Desktop/houzhenying/代码项目/job-helper/assets",
+    "settings.editor.selected.configurable": "preferences.pluginManager"
   }
 }]]></component>
   <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets" />
+    </key>
     <key name="MoveFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/src/pages" />
     </key>
   </component>
-  <component name="RunManager" selected="Python.main">
+  <component name="RunManager" selected="Makefile Target.run">
+    <configuration name="build" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile" temporary="true">
+      <makefile filename="$PROJECT_DIR$/Makefile" target="build" workingDirectory="" arguments="">
+        <envs />
+      </makefile>
+      <method v="2" />
+    </configuration>
+    <configuration name="run-restart" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile" temporary="true">
+      <makefile filename="$PROJECT_DIR$/Makefile" target="run-restart" workingDirectory="" arguments="">
+        <envs />
+      </makefile>
+      <method v="2" />
+    </configuration>
+    <configuration name="run" type="MAKEFILE_TARGET_RUN_CONFIGURATION" factoryName="Makefile" temporary="true">
+      <makefile filename="$PROJECT_DIR$/Makefile" target="run" workingDirectory="" arguments="">
+        <envs />
+      </makefile>
+      <method v="2" />
+    </configuration>
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="job-helper" />
       <option name="ENV_FILES" value="" />
@@ -129,12 +143,18 @@
       <method v="2" />
     </configuration>
     <list>
+      <item itemvalue="Makefile Target.build" />
+      <item itemvalue="Makefile Target.run" />
+      <item itemvalue="Makefile Target.run-restart" />
       <item itemvalue="Python.main" />
       <item itemvalue="Shell Script.pack.sh" />
     </list>
     <recent_temporary>
       <list>
+        <item itemvalue="Makefile Target.run" />
         <item itemvalue="Python.main" />
+        <item itemvalue="Makefile Target.build" />
+        <item itemvalue="Makefile Target.run-restart" />
         <item itemvalue="Shell Script.pack.sh" />
       </list>
     </recent_temporary>
@@ -156,15 +176,15 @@
     </task>
     <servers />
   </component>
-  <component name="XDebuggerManager">
-    <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/data/service.py</url>
-          <line>243</line>
-          <option name="timeStamp" value="7" />
-        </line-breakpoint>
-      </breakpoints>
-    </breakpoint-manager>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

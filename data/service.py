@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, date
-from typing import Optional
+from typing import Optional, List
 
 from peewee import SQL
 
@@ -7,7 +7,7 @@ from common.pagination import Pagination
 from common.util import datetime_2_date_str
 from config import DEFAULT_JOB_END_DAY
 from constant import *
-from data.model import Job, Task, Log
+from data.model import Job, Task, Log, Plugin
 
 
 class JobService:
@@ -236,10 +236,36 @@ class LogService:
         return list(Log.select().where(Log.job == job_id).order_by(Log.id.desc()))
 
     @staticmethod
-    def create(job_id: int, name: str, content: str, related_files: Optional[list[str]] = None, ):
+    def create(job_id: int, name: str, content: str, related_files: Optional[list[str]] = None):
         log = Log(job_id=job_id, name=name, content=content)
         if related_files is None:
             log.related_files = related_files
 
         log.save()
         return log
+
+
+class PluginService:
+    @staticmethod
+    def create(name: str, version: int, description: str, file_name: str):
+        plugin = Plugin(name=name, version=version, description=description, file_name=file_name)
+        plugin.save()
+
+    @staticmethod
+    def update(id: int, version: int):
+        Plugin.update(version=version).where(Plugin.id == id).execute()
+
+    @staticmethod
+    def list():
+        return list(Plugin.select().order_by(Plugin.id.desc()))
+
+    @staticmethod
+    def query(name: str, version: Optional[int] = None) -> Optional[Plugin]:
+        q = Plugin.select().where(Plugin.name == name)
+        if version is not None:
+            q = q.where(Plugin.version == version)
+        return q.get_or_none()
+
+    @staticmethod
+    def delete(id: int):
+        Plugin.delete_by_id(id)

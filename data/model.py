@@ -28,6 +28,7 @@ class Job(BaseModel):
             (('end_time',), False),
         )
 
+
 class Task(BaseModel):
     id = AutoField()
     job = ForeignKeyField(Job, backref='tasks', index=True)
@@ -41,6 +42,7 @@ class Task(BaseModel):
         indexes = (
             (('job_id', 'name'), True),
         )
+
 
 class Log(BaseModel):
     id = AutoField()
@@ -60,3 +62,17 @@ class Log(BaseModel):
     @related_files.setter
     def related_files(self, value):
         self._related_files = json.dumps(value)
+
+
+class Plugin(BaseModel):
+    id = AutoField()
+    name = CharField()
+    description = CharField()
+    version = IntegerField()
+    file_name = CharField()
+    created_time = DateTimeField(default=datetime.now)
+
+    class Meta:
+        indexes = (
+            (('name', 'version'), True),
+        )

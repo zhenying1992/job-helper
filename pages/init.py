@@ -55,7 +55,7 @@ class InitView:
         self.page.pop_dialog()
 
         logger.info("开始启动")
-        from data import init_db
+        from data.db import init_db
         from pages.urls import app
 
         init_db()
