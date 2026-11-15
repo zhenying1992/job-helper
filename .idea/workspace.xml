@@ -5,20 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="更改">
-      <change afterPath="$PROJECT_DIR$/Makefile" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/setting.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/task/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/task/gantt.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/task/list.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/task/topo.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/job-helper.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/job-helper.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/icon.png" beforeDir="false" afterPath="$PROJECT_DIR$/assets/icon.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/common/util.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/util.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/constant.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/model.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/init.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/init.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/job.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/jobs.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/setting.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/setting.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/urls.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/urls.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,22 +62,23 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Makefile Target.build.executor": "Run",
-    "Makefile Target.run-restart.executor": "Run",
-    "Makefile Target.run.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.main.executor": "Debug",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "Shell Script.pack.sh.executor": "Run",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/Users/hou/Desktop/houzhenying/代码项目/job-helper/assets",
-    "settings.editor.selected.configurable": "preferences.pluginManager"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Makefile Target.build.executor&quot;: &quot;Run&quot;,
+    &quot;Makefile Target.run-restart.executor&quot;: &quot;Run&quot;,
+    &quot;Makefile Target.run.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.flow.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;Shell Script.pack.sh.executor&quot;: &quot;Run&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/hou/Desktop/houzhenying/代码项目/job-helper/assets&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/assets" />
@@ -105,6 +107,28 @@
       </makefile>
       <method v="2" />
     </configuration>
+    <configuration name="flow" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="plugins" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/../plugins" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/../plugins/flow.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
     <configuration name="main" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="job-helper" />
       <option name="ENV_FILES" value="" />
@@ -127,35 +151,20 @@
       <option name="INPUT_FILE" value="" />
       <method v="2" />
     </configuration>
-    <configuration name="pack.sh" type="ShConfigurationType" temporary="true">
-      <option name="SCRIPT_TEXT" value="" />
-      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
-      <option name="SCRIPT_PATH" value="$PROJECT_DIR$/deploy/mac/pack.sh" />
-      <option name="SCRIPT_OPTIONS" value="" />
-      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
-      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/deploy/mac" />
-      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
-      <option name="INTERPRETER_PATH" value="/bin/zsh" />
-      <option name="INTERPRETER_OPTIONS" value="" />
-      <option name="EXECUTE_IN_TERMINAL" value="true" />
-      <option name="EXECUTE_SCRIPT_FILE" value="true" />
-      <envs />
-      <method v="2" />
-    </configuration>
     <list>
       <item itemvalue="Makefile Target.build" />
       <item itemvalue="Makefile Target.run" />
       <item itemvalue="Makefile Target.run-restart" />
+      <item itemvalue="Python.flow" />
       <item itemvalue="Python.main" />
-      <item itemvalue="Shell Script.pack.sh" />
     </list>
     <recent_temporary>
       <list>
         <item itemvalue="Makefile Target.run" />
         <item itemvalue="Python.main" />
+        <item itemvalue="Python.flow" />
         <item itemvalue="Makefile Target.build" />
         <item itemvalue="Makefile Target.run-restart" />
-        <item itemvalue="Shell Script.pack.sh" />
       </list>
     </recent_temporary>
   </component>

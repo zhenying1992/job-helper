@@ -1,8 +1,8 @@
 import flet as ft
 
 from pages import layout
-from pages.overview import overview
 from pages.job import job_view
+from pages.overview import overview
 from pages.jobs import jobs_view
 from pages.setting import setting_view
 

@@ -9,7 +9,7 @@ from common.pagination import Pagination
 from common.util import utc_2_naive_datetime, datetime_2_date_str
 from constant import Status, Priority, JobType
 from data.model import Job
-from data.service import JobService
+from data.service import JobService, PluginService
 
 
 @ft.component
@@ -141,6 +141,9 @@ class JobsView:
 
     # 表格
     def open_new_job_dialog(self, e: ft.Event[ft.Button]):
+        plugins = PluginService.list()
+        job_types = [JobType.COMMON] + [plugin.name for plugin in plugins]
+
         # 表单控件
         job_name = ft.TextField(
             label="工作名",
@@ -167,7 +170,7 @@ class JobsView:
         job_type = ft.Dropdown(
             label="类型",
             value=JobType.COMMON,
-            options=[ft.DropdownOption(i) for i in JobType.list()],
+            options=[ft.DropdownOption(i) for i in job_types],
             border_color="#40C9FF",
             focused_border_color="#40C9FF",
             bgcolor="#f0182b",

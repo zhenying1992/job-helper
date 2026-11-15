@@ -4,10 +4,10 @@ from typing import Optional, List
 from peewee import SQL
 
 from common.pagination import Pagination
-from common.util import datetime_2_date_str
+from common.util import datetime_2_date_str, cal_position
 from config import DEFAULT_JOB_END_DAY
 from constant import *
-from data.model import Job, Task, Log, Plugin
+from data.model import Job, Task, Log, Plugin, Position
 
 
 class JobService:
@@ -150,15 +150,25 @@ class TaskService:
         return list(Task.select().where(Task.job == job_id))
 
     @staticmethod
-    def create(job_id: int, name: str, description: str, priority: str = Priority.LOW, status: str = Status.NOT_START,
-               start_time: date = None, end_time: date = None, ):
+    def create(
+            job_id: int, name: str, description: str,
+            priority: str = Priority.LOW, status: str = Status.NOT_START,
+            start_time: date = None, end_time: date = None,
+            downstreams: list[int] = None
+    ) -> Task:
+        tasks = TaskService.query(job_id)
+
         if not start_time:
             start_time = datetime.now()
+
         if not end_time:
             end_time = datetime.now() + timedelta(days=DEFAULT_JOB_END_DAY)
 
+        x, y = cal_position(len(tasks))
+        position = Position(x=x, y=y, downstreams=downstreams or [])
+
         task = Task(job_id=job_id, name=name, description=description, priority=priority, status=status,
-                    start_time=start_time, end_time=end_time, )
+                    start_time=start_time, end_time=end_time, position=position)
         task.save()
         JobService.sync_progress(job_id)
         return task
@@ -168,8 +178,10 @@ class TaskService:
         return Task.get(Task.id == id)
 
     @staticmethod
-    def update(id: int, name: Optional[str] = None, description: Optional[str] = None,
-               status: Optional[str] = None, start_time: date = None, end_time: date = None, ):
+    def update(
+            id: int, name: Optional[str] = None, description: Optional[str] = None,
+            status: Optional[str] = None, start_time: date = None, end_time: date = None,
+    ):
 
         task = TaskService.get(id)
         if name is not None:
@@ -190,7 +202,6 @@ class TaskService:
         task.save()
 
         JobService.sync_progress(task.job.id)
-
 
     @staticmethod
     def delete(id: int):
@@ -256,7 +267,7 @@ class PluginService:
         Plugin.update(version=version).where(Plugin.id == id).execute()
 
     @staticmethod
-    def list():
+    def list() -> List[Plugin]:
         return list(Plugin.select().order_by(Plugin.id.desc()))
 
     @staticmethod

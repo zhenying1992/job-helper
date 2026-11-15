@@ -2,6 +2,7 @@ import logging
 import re
 import shutil
 from pathlib import Path
+from typing import Any
 
 import flet as ft
 import flet_dropzone as ftd
@@ -153,10 +154,8 @@ class PluginContent:
         self.refresh()
 
     def add_plugin(self, file):
-        content = Path(file.path).read_text(encoding="utf-8")
-
         try:
-            name, version, description = self.extract(content)
+            ns = self.load(file.path)
         except Exception as ex:
             ft.context.page.show_dialog(ft.Banner(
                 bgcolor=ft.Colors.ERROR_CONTAINER,
@@ -168,6 +167,7 @@ class PluginContent:
             ))
             return
 
+        name, version, description = ns['PLUGIN_NAME'], ns['PLUGIN_VERSION'], ns['PLUGIN_DESCRIPTION']
         plugin = self.service.query(name=name)
         if not plugin:
             logger.info(f'Adding plugin {name}')
@@ -194,17 +194,15 @@ class PluginContent:
         shutil.copy2(file.path, f'{self.plugin_path}/{file.name}')
         logger.info(f'插件{file.name}安装成功')
 
-    def extract(self, content: str) -> tuple[str, int, str]:
-        # 从插件文件中解析插件名、版本、描述
-        meta = {}
-        for field in ("PLUGIN_NAME", "PLUGIN_VERSION", "PLUGIN_DESCRIPTION"):
-            m = re.search(rf'^\s*{field}\s*=\s*["\'](.+?)["\']', content, re.MULTILINE)
-            if m:
-                meta[field] = m.group(1)
-            else:
-                raise Exception(f'未找到{field}')
+    def load(self, path) -> dict[str, Any]:
+        ns = {}
+        exec(open(path, encoding="utf-8").read(), ns)
 
-        return meta['PLUGIN_NAME'], int(meta['PLUGIN_VERSION']), meta['PLUGIN_DESCRIPTION']
+        assert 'PLUGIN_NAME' in ns, "缺少PLUGIN_NAME变量"
+        assert 'PLUGIN_VERSION' in ns, '缺少PLUGIN_VERSION变量'
+        assert 'PLUGIN_DESCRIPTION' in ns, '缺少PLUGIN_DESCRIPTION变量'
+        assert 'build' in ns, '缺少build方法'
+        return ns
 
     def is_exist(self, name: str, version: int) -> bool:
         for plugin in self.plugins:

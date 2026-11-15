@@ -1,7 +1,8 @@
 import json
+from dataclasses import dataclass, asdict
 from datetime import datetime
 
-from peewee import AutoField, CharField, DateTimeField, ForeignKeyField, IntegerField
+from peewee import AutoField, CharField, DateTimeField, ForeignKeyField, IntegerField, JSONField, TextField
 
 from data.db import BaseModel
 
@@ -29,6 +30,13 @@ class Job(BaseModel):
         )
 
 
+@dataclass
+class Position:
+    x: int
+    y: int
+    downstreams: list[int]
+
+
 class Task(BaseModel):
     id = AutoField()
     job = ForeignKeyField(Job, backref='tasks', index=True)
@@ -37,6 +45,15 @@ class Task(BaseModel):
     status = CharField()
     start_time = DateTimeField()
     end_time = DateTimeField()
+    _position = TextField(column_name='position')
+
+    @property
+    def position(self) -> Position:
+        return Position(**json.loads(self._position))
+
+    @position.setter
+    def position(self, value: Position):
+        self._position = json.dumps(asdict(value))
 
     class Meta:
         indexes = (
