@@ -150,6 +150,24 @@ class TaskService:
         return list(Task.select().where(Task.job == job_id))
 
     @staticmethod
+    def filter(
+            status: Optional[str] = None,
+            start_time: Optional[datetime] = None,
+            end_time: Optional[datetime] = None,
+    ) -> list[Task]:
+        q = Task.select()
+        if status:
+            q = q.where(Task.status == status)
+
+        if start_time:
+            q = q.where(Task.start_time <= start_time)
+
+        if end_time:
+            q = q.where(Task.end_time <= end_time)
+
+        return list(q)
+
+    @staticmethod
     def create(
             job_id: int, name: str, description: str,
             priority: str = Priority.LOW, status: str = Status.NOT_START,

@@ -13,6 +13,8 @@ class Header:
             active_key = "job"
         elif current_route.startswith("/setting"):
             active_key = "setting"
+        elif current_route.startswith("/calendar"):
+            active_key = "calendar"
         else:
             active_key = "overview"
 
@@ -64,6 +66,8 @@ class Header:
                     ft.Text("工作小助手", color="#CFD8FF", size=26, weight=ft.FontWeight.BOLD),
                     ft.Container(width=32),  # 标题和tab之间留白
                     self.build_tab("大盘概览", "/overview", "overview"),
+                    ft.Container(width=24),
+                    self.build_tab("日历排期", "/calendar", "calendar"),
                     ft.Container(width=24),
                     self.build_tab("工作列表", "/jobs", "jobs"),
                     ft.Container(width=24),

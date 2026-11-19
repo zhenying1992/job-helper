@@ -1,6 +1,7 @@
 import flet as ft
 
 from pages import layout
+from pages.calendar import calendar_view
 from pages.job import job_view
 from pages.overview import overview
 from pages.jobs import jobs_view
@@ -18,6 +19,7 @@ def get_urls():
                 ft.Route(path='jobs', component=jobs_view),
                 ft.Route(path='job/:job_id', component=job_view),
                 ft.Route(path='setting', component=setting_view),
+                ft.Route(path='calendar', component=calendar_view),
             ]
         )]
     )
