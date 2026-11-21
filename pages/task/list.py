@@ -1,23 +1,29 @@
-from dataclasses import dataclass
-
 import flet as ft
 
 from common.decorate import catch_error
 from common.util import datetime_2_date_str
-from constant import COLOR_TEXT, BG_PANEL, BORDER_RADIUS, COLOR_PRIMARY, BG_HEADER
-from data.model import Job, Task
+from constant import (
+    COLOR_TEXT, BG_PANEL, BORDER_RADIUS, COLOR_PRIMARY, BG_HEADER, Status,
+)
+from data.model import Job
 from data.service import TaskService
 from pages.task import CreateTaskDialog, DropTaskDialog, UpdateTaskDialog
+from theme import (
+    BORDER, BG_TABLE, BTN_TEXT, BG_HEADER_BAR, RADIUS_SM, FONT_MONO, FS_SM,
+)
 
 
 @ft.component
 @catch_error
-def task_list_view(job: Job):
-    refresh, set_refresh = ft.use_state(False)
+def task_list_view(job: Job, on_changed=None):
+    # 自增计数触发重渲染；TaskList 会在每次重建时重新查库
+    # on_changed 冒泡到上层（job_view），让顶栏/左侧详情同步重算进度与状态
+    _, set_refresh = ft.use_state(0)
 
     def bump():
-        # 函数式更新：永远基于 hook 里的最新值，不受闭包快照影响
         set_refresh(lambda v: v + 1)
+        if on_changed:
+            on_changed()
 
     return TaskList(job=job, bump=bump).build()
 
@@ -33,11 +39,10 @@ class TaskList:
             bgcolor=BG_PANEL,
             border_radius=BORDER_RADIUS,
             padding=20,
-            # border=ft.border.all(1, "#254b80"),
             content=ft.Column(
                 controls=[
                     self.build_header(),
-                    ft.Divider(color="#254b80", height=1),
+                    ft.Divider(color=BORDER, height=1),
 
                     self.build_table(),
 
@@ -54,7 +59,7 @@ class TaskList:
                 ft.Button(
                     "新建任务",
                     bgcolor=COLOR_PRIMARY,
-                    color="white",
+                    color=BTN_TEXT,
                     on_click=lambda: ft.context.page.show_dialog(
                         CreateTaskDialog(
                             job_id=self.job.id,
@@ -71,9 +76,21 @@ class TaskList:
             rows.append(
                 ft.DataRow(
                     cells=[
-                        ft.DataCell(ft.Text(task.id, color=COLOR_TEXT)),
+                        ft.DataCell(ft.Text(str(task.id), color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(task.name, color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(task.status, color=COLOR_TEXT)),
+                        ft.DataCell(
+                            ft.Container(
+                                ft.Text(Status.normalize(task.status), color=BG_HEADER_BAR,
+                                        size=FS_SM, font_family=FONT_MONO,
+                                        weight=ft.FontWeight.BOLD),
+                                bgcolor=Status.color(task.status),
+                                border_radius=RADIUS_SM,
+                                padding=ft.Padding(6, 2, 6, 2),
+                            )
+                        ),
+                        ft.DataCell(ft.Text(task.assignee or '-', color=COLOR_TEXT)),
+                        ft.DataCell(ft.Text(', '.join(task.tags) or '-', color=COLOR_TEXT)),
+                        ft.DataCell(ft.Text(f'{task.estimate_hours}h' if task.estimate_hours else '-', color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(datetime_2_date_str(task.start_time), color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(datetime_2_date_str(task.end_time), color=COLOR_TEXT)),
                         ft.DataCell(ft.Row([
@@ -95,25 +112,26 @@ class TaskList:
             )
 
         return ft.Container(
-            height=350,
-            expand=True,
             content=ft.Column(
                 [ft.DataTable(
                     border_radius=BORDER_RADIUS,
-                    bgcolor="#12182e",
+                    bgcolor=BG_TABLE,
                     heading_row_color=BG_HEADER,
                     columns=[
                         ft.DataColumn(label=ft.Text("ID", color=COLOR_TEXT)),
                         ft.DataColumn(label=ft.Text("任务", color=COLOR_TEXT)),
                         ft.DataColumn(label=ft.Text("状态", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("负责人", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("标签", color=COLOR_TEXT)),
+                        ft.DataColumn(label=ft.Text("工时", color=COLOR_TEXT)),
                         ft.DataColumn(label=ft.Text("开始时间", color=COLOR_TEXT)),
                         ft.DataColumn(label=ft.Text("结束时间", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("操作", color="#cbd5e1")),
+                        ft.DataColumn(label=ft.Text("操作", color=COLOR_TEXT)),
                     ],
                     rows=rows,
                     # expand=True,
                 )],
-                scroll=ft.ScrollMode.AUTO,  # 超出高度自动出现滚动条
-                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # ✅关键！子控件横向拉伸填满Column宽度
+                tight=True,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # 子控件横向拉伸填满Column宽度
             )
         )

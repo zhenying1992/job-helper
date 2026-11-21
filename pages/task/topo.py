@@ -11,14 +11,30 @@ from constant import NODE_H, NODE_W
 from data.model import Job, Task, Position
 from data.service import TaskService
 from pages.task import CreateTaskDialog, UpdateTaskDialog, DropTaskDialog
+from theme import (
+    BG_CANVAS as BG, BG_CARD_ALT as CARD, BORDER_TOPO as BORDER,
+    PRIMARY as ACCENT, ACCENT_SOFT as GHOST, TEXT_BRIGHT as TEXT,
+    SELECTED as SEL, SUCCESS as HOVER, GREEN_DARK, PURPLE_DARK, PURPLE,
+    TEXT_SUBTLE, TRANSPARENT, FS_LG, FS_MD,
+)
 
 # ---------------- 尺寸与配色 ----------------
 
-CANVAS_W, CANVAS_H = 740, 540
+# 画布尽量撑满工作详情右侧区域；下限保证节点排布空间。
+# 工作详情右侧约为窗口宽 - 左侧 300 - 内边距，取一个偏大的自适应值。
+def _canvas_size() -> tuple[int, int]:
+    # 右侧工作区 ≈ 窗口宽 - 左侧详情 300 - 内边距 ≈ window - 360
+    try:
+        win_w = ft.context.page.window.width or 1280
+    except Exception:
+        win_w = 1280
+    return max(780, int(win_w) - 360), 560
 
-BG, CARD, BORDER = "#0b1220", "#1e293b", "#334155"
-ACCENT, GHOST, TEXT = "#38bdf8", "#7dd3fc", "#e2e8f0"
-SEL, HOVER = "#fbbf24", "#22c55e"  # 选中色 / 连线悬停落点色
+
+# 导入期无渲染上下文，这里只是兜底；真实尺寸在 FlowEditorView 渲染时取窗口宽度。
+CANVAS_W, CANVAS_H = 900, 560
+
+# 颜色统一来自 theme；上面的别名保持下方绘图代码的可读性。
 
 PORT_BAND = 18  # 节点四条边往内多少像素算"连线带"
 LINK_HIT_DIST = 9  # 点击选中连线的判定距离（px）
@@ -110,10 +126,10 @@ class EditorState:
 def node_colors(node: Node) -> tuple[str, str]:
     """返回 (填充色, 默认边框色)"""
     if node.kind == "start":
-        return "#052e16", "#22c55e"
+        return GREEN_DARK, HOVER
     if node.kind == "end":
-        return "#3b0764", "#a855f7"
-    return CARD, "#475569"
+        return PURPLE_DARK, PURPLE
+    return CARD, TEXT_SUBTLE
 
 
 # ==================== 几何（纯函数） ====================
@@ -464,7 +480,7 @@ def NodeView(state: EditorState, node: Node):
                 border=ft.Border.all(2, border),
                 border_radius=10,
                 alignment=ft.Alignment.CENTER,
-                content=ft.Text(node.text, color=TEXT, size=14),
+                content=ft.Text(node.text, color=TEXT, size=FS_LG),
             ),
         ),
     )
@@ -473,6 +489,7 @@ def NodeView(state: EditorState, node: Node):
 @ft.component
 def FlowEditorView(state: EditorState):
     """整张图：画布 + 命中层 + 全部节点，全部由 state 派生"""
+    canvas_w, canvas_h = _canvas_size()
     return ft.Column(
         [
             ft.Row(
@@ -482,7 +499,7 @@ def FlowEditorView(state: EditorState):
                     ft.Button("删除选中", icon=ft.Icons.DELETE_OUTLINE,
                               on_click=lambda e: delete_selected(state)),
                     ft.Text("拖四边 = 连线 · 单击连线 = 选中 · 双击节点 = 改名",
-                            size=12, color="#64748b"),
+                            size=FS_MD, color=TEXT_SUBTLE),
                 ],
                 spacing=10,
             ),
@@ -491,21 +508,21 @@ def FlowEditorView(state: EditorState):
                     [
                         cv.Canvas(
                             shapes=compute_shapes(state),
-                            width=CANVAS_W,
-                            height=CANVAS_H,
+                            width=canvas_w,
+                            height=canvas_h,
                         ),
                         ft.GestureDetector(
                             on_tap=lambda e: tap_canvas(state, e),
                             content=ft.Container(
-                                width=CANVAS_W,
-                                height=CANVAS_H,
-                                bgcolor="#01000000",
+                                width=canvas_w,
+                                height=canvas_h,
+                                bgcolor=TRANSPARENT,
                             ),
                         ),
                         *[NodeView(state, n) for n in state.nodes],
                     ],
-                    width=CANVAS_W,
-                    height=CANVAS_H,
+                    width=canvas_w,
+                    height=canvas_h,
                 ),
                 bgcolor=BG,
                 border=ft.Border.all(1, BORDER),

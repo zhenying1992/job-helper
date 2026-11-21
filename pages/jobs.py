@@ -10,6 +10,12 @@ from common.util import utc_2_naive_datetime, datetime_2_date_str
 from constant import Status, Priority, JobType
 from data.model import Job
 from data.service import JobService, PluginService
+from theme import (
+    BG_SEARCH, BG_INPUT, BG_DIALOG, BG_TABLE, BG_TABLE_HEAD, BTN_ADD,
+    ACCENT_BRIGHT, TEXT_BRIGHT, TEXT_TITLE, TEXT, MUTED, TEXT_ON_DARK, BTN_TEXT, SLATE,
+    RADIUS_LG, TABLE_RADIUS,
+    FS_BASE, FS_MD, FS_XXL,
+)
 
 
 @ft.component
@@ -104,35 +110,34 @@ class JobsView:
                         hint_text="输入工作名称搜索",
                         width=320,
                         height=40,
-                        border_radius=8,
-                        bgcolor="#161d34",
-                        text_size=14,
+                        border=ft.OutlineInputBorder(border_radius=RADIUS_LG),
+                        bgcolor=BG_SEARCH,
+                        text_size=FS_BASE,
                         on_change=lambda e: self.set_keyword(e.control.value),
                     ),
                     ft.Dropdown(
                         label="工作类型",
                         width=240,
                         options=[ft.DropdownOption(key='', text='全部')] +
-                                [ft.DropdownOption(i) for i in JobType.list()],
-                        value="全部",
+                                [ft.DropdownOption(key=i, text=i) for i in JobType.list()],
+                        value="",
                         on_select=lambda e: self.set_type(e.control.value),
                     ),
                     ft.Dropdown(
-                        label="任务状态",
+                        label="工作状态",
                         width=140,
-                        options=[ft.dropdown.Option(key="", text='全部')] + [
-                            ft.dropdown.Option(i)
-                            for i in Status.list()
+                        options=[ft.DropdownOption(key="", text="全部")] + [
+                            ft.DropdownOption(key=i, text=i) for i in Status.list()
                         ],
-                        value="全部",
+                        value="",
                         on_select=lambda e: self.set_status(e.control.value),
                     ),
                     ft.Container(expand=True),
                     ft.Button(
-                        "+ 新增任务",
-                        bgcolor="#2563eb",
-                        color=ft.Colors.WHITE,
-                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+                        "+ 新增工作",
+                        bgcolor=BTN_ADD,
+                        color=BTN_TEXT,
+                        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=RADIUS_LG)),
                         on_click=self.open_new_job_dialog,
                     )
                 ],
@@ -144,48 +149,33 @@ class JobsView:
         plugins = PluginService.list()
         job_types = [JobType.COMMON] + [plugin.name for plugin in plugins]
 
-        # 表单控件
-        job_name = ft.TextField(
-            label="工作名",
-            hint_text="请输入工作名称",
-            border_color="#40C9FF",
-            focused_border_color="#40C9FF",
-            bgcolor="#171e38",
-            color="#e2e8f0",
-            label_style=ft.TextStyle(color="#94a3b8"),
+        # 表单控件共享同一套暗色输入框样式
+        def field(kind, **kwargs):
+            common = dict(
+                border_color=ACCENT_BRIGHT,
+                focused_border_color=ACCENT_BRIGHT,
+                bgcolor=BG_INPUT,
+                color=TEXT_BRIGHT,
+                label_style=ft.TextStyle(color=MUTED),
+            )
+            common.update(kwargs)
+            return kind(**common)
+
+        job_name = field(
+            ft.TextField, label="工作名", hint_text="请输入工作名称",
             max_length=20,
-            # on_change=''
         )
-        job_desc = ft.TextField(
-            label="描述",
-            hint_text="非必填，填写任务说明",
-            multiline=True,
-            min_lines=2,
-            border_color="#40C9FF",
-            focused_border_color="#40C9FF",
-            bgcolor="#171e38",
-            color="#e2e8f0",
-            label_style=ft.TextStyle(color="#94a3b8"),
+        job_desc = field(
+            ft.TextField, label="描述", hint_text="非必填，填写任务说明",
+            multiline=True, min_lines=2,
         )
-        job_type = ft.Dropdown(
-            label="类型",
-            value=JobType.COMMON,
-            options=[ft.DropdownOption(i) for i in job_types],
-            border_color="#40C9FF",
-            focused_border_color="#40C9FF",
-            bgcolor="#f0182b",
-            color="#e2e8f0",
-            label_style=ft.TextStyle(color="#94a3b8"),
+        job_type = field(
+            ft.Dropdown, label="类型", value=JobType.COMMON,
+            options=[ft.DropdownOption(key=i, text=i) for i in job_types],
         )
-        job_priority = ft.Dropdown(
-            label="优先级",
-            value=Priority.LOW,
-            options=[ft.DropdownOption(i) for i in Priority.list()],
-            border_color="#40C9FF",
-            focused_border_color="#40C9FF",
-            bgcolor="#f0182b",
-            color="#e2e8f0",
-            label_style=ft.TextStyle(color="#94a3b8"),
+        job_priority = field(
+            ft.Dropdown, label="优先级", value=Priority.LOW,
+            options=[ft.DropdownOption(key=i, text=i) for i in Priority.list()],
         )
         today = datetime.date.today()
         today_7 = datetime.date.today() + datetime.timedelta(days=7)
@@ -207,8 +197,17 @@ class JobsView:
         )
 
         def submit_job(e):
+            name = (job_name.value or '').strip()
+            if not name:
+                ft.context.page.show_dialog(ft.SnackBar(ft.Text("工作名称不能为空")))
+                return
+            if JobService.exists_name(name):
+                ft.context.page.show_dialog(
+                    ft.SnackBar(ft.Text("名称已存在；若已删除，请先到回收站彻底删除"))
+                )
+                return
             JobService.create(
-                name=job_name.value,
+                name=name,
                 description=job_desc.value,
                 type=job_type.value,
                 priority=job_priority.value,
@@ -216,11 +215,11 @@ class JobsView:
                 end_time=utc_2_naive_datetime(picker.end_value),
             )
             ft.context.page.pop_dialog()
-            self.set_refresh_flag(not self.refresh_flag)
+            self.set_refresh_flag(lambda v: not v)
 
         dialog = ft.AlertDialog(
-            title=ft.Text("新建工作", size=20, color="#CFD8FF", weight=ft.FontWeight.BOLD),
-            bgcolor="#111834",
+            title=ft.Text("新建工作", size=FS_XXL, color=TEXT_TITLE, weight=ft.FontWeight.BOLD),
+            bgcolor=BG_DIALOG,
             content=ft.Container(
                 width=520,
                 content=ft.Column(
@@ -237,7 +236,7 @@ class JobsView:
             ),
             actions=[
                 ft.TextButton("取消", on_click=lambda e: setattr(dialog, "open", False) or ft.context.page.update()),
-                ft.Button("确认创建", on_click=submit_job, bgcolor="#40C9FF", color="#0f1529"),
+                ft.Button("确认创建", on_click=submit_job, bgcolor=ACCENT_BRIGHT, color=TEXT_ON_DARK),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -247,17 +246,17 @@ class JobsView:
         def drop_job(_):
             JobService.delete(id=job.id)
             ft.context.page.pop_dialog()
-            self.set_refresh_flag(not self.refresh_flag)
+            self.set_refresh_flag(lambda v: not v)
 
         dialog = ft.AlertDialog(
-            title=ft.Text("删除工作", size=20, color="#CFD8FF", weight=ft.FontWeight.BOLD),
-            bgcolor="#111834",
+            title=ft.Text("删除工作", size=FS_XXL, color=TEXT_TITLE, weight=ft.FontWeight.BOLD),
+            bgcolor=BG_DIALOG,
             content=ft.Container(
-                content=ft.Text(f"确定要删除{job.name}？", color="#cbd5e1")
+                content=ft.Text(f"确定要删除{job.name}？", color=TEXT)
             ),
             actions=[
                 ft.TextButton("取消", on_click=lambda e: setattr(dialog, "open", False) or ft.context.page.update()),
-                ft.Button("确认", on_click=drop_job, bgcolor="#40C9FF", color="#0f1529"),
+                ft.Button("确认", on_click=drop_job, bgcolor=ACCENT_BRIGHT, color=TEXT_ON_DARK),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -268,28 +267,28 @@ class JobsView:
         return ft.Container(
             ft.Row(
                 controls=[ft.DataTable(
-                    border_radius=10,
-                    bgcolor="#12182e",
-                    heading_row_color="#1b2442",
+                    border_radius=TABLE_RADIUS,
+                    bgcolor=BG_TABLE,
+                    heading_row_color=BG_TABLE_HEAD,
                     columns=[
-                        ft.DataColumn(label=ft.Text("ID", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("ID", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("名称", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("名称", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
 
-                        ft.DataColumn(label=ft.Text("类型", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("类型", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("优先级", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("优先级", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("状态", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("状态", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("进度", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("进度", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("开始时间", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("开始时间", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("结束时间", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("结束时间", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
-                        ft.DataColumn(label=ft.Text("操作", color="#cbd5e1"),
+                        ft.DataColumn(label=ft.Text("操作", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
                     ],
                     rows=self.list_row(),
@@ -299,36 +298,47 @@ class JobsView:
         )
 
     def list_row(self):
+        def view_handler(job_id):
+            """单参数闭包：Flet 事件只回传一个事件对象，job_id 由闭包捕获。"""
+            def _go(_e):
+                ft.context.page.navigate(f"/job/{job_id}")
+            return _go
+
+        def drop_handler(job):
+            def _drop(_e):
+                self.open_drop_job_dialog(_e, job)
+            return _drop
+
         _rows = []
         for _job in self.pagination.data:
             _row = ft.DataRow(cells=[
-                ft.DataCell(ft.Text(_job.id, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(str(_job.id), color=TEXT, width=55, text_align=ft.TextAlign.CENTER)),
                 ft.DataCell(
                     ft.Text(
-                        _job.name, color="#cbd5e1", max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, width=300,
+                        _job.name, color=TEXT, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, width=220,
                         tooltip=_job.description, text_align=ft.TextAlign.CENTER,
                     ),
                 ),
-                ft.DataCell(ft.Text(_job.type, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
-                ft.DataCell(ft.Text(_job.priority, color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(_job.type, color=TEXT, width=105, text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(_job.priority, color=TEXT, width=65, text_align=ft.TextAlign.CENTER)),
                 ft.DataCell(
-                    ft.Container(
-                        ft.Text(_job.status, size=12, text_align=ft.TextAlign.CENTER),
-                        bgcolor="#f97316",
-                        padding=3, border_radius=4
+                    ft.Text(
+                        Status.normalize(_job.status), color=Status.color(_job.status),
+                        size=FS_MD, weight=ft.FontWeight.BOLD, width=80,
+                        text_align=ft.TextAlign.CENTER,
                     )
                 ),
-                ft.DataCell(ft.Text(f'{_job.progress}%', color="#cbd5e1", text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(f'{_job.progress}%', color=TEXT, width=65, text_align=ft.TextAlign.CENTER)),
                 ft.DataCell(
-                    ft.Text(datetime_2_date_str(_job.start_time), color="#cbd5e1", text_align=ft.TextAlign.CENTER)
+                    ft.Text(datetime_2_date_str(_job.start_time), color=TEXT, width=110, text_align=ft.TextAlign.CENTER)
                 ),
                 ft.DataCell(
-                    ft.Text(datetime_2_date_str(_job.end_time), text_align=ft.TextAlign.CENTER, color="#cbd5e1")
+                    ft.Text(datetime_2_date_str(_job.end_time), text_align=ft.TextAlign.CENTER, color=TEXT, width=110)
                 ),
                 ft.DataCell(ft.Row([
-                    ft.TextButton("查看", on_click=lambda e, _job=_job: ft.context.page.navigate(f"/job/{_job.id}")),
-                    ft.TextButton("删除", on_click=lambda e, _job=_job: self.open_drop_job_dialog(e, _job)),
-                ]))
+                    ft.TextButton("查看", on_click=view_handler(_job.id)),
+                    ft.TextButton("删除", on_click=drop_handler(_job)),
+                ], width=120, alignment=ft.MainAxisAlignment.CENTER))
             ])
             _rows.append(_row)
 
@@ -340,28 +350,19 @@ class JobsView:
         return ft.Container(
             padding=ft.Padding(left=24, right=24, top=16, bottom=16),
             content=ft.Row([
-                ft.Text(f"共 {self.pagination.total} 条记录", color="#94a3b8"),
+                ft.Text(f"共 {self.pagination.total} 条记录", color=MUTED),
                 ft.Container(expand=True),
-
-                # ft.Dropdown(
-                #     label="每页条数",
-                #     width=100,
-                #     options=[ft.dropdown.Option("10"), ft.dropdown.Option("20"), ft.dropdown.Option("50")],
-                #     value="10",
-                #     on_select=lambda e: self.set_page_size(int(e.control.value)),
-                #     color='#999999'
-                # ),
                 ft.Container(width=10),
                 ft.Button(
                     "上一页",
                     disabled=self.current <= 1,
-                    on_click=lambda e: self.set_current(self.current - 1), color='#999999'
+                    on_click=lambda e: self.set_current(self.current - 1), color=SLATE
                 ),
-                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页", color='#999999'),
+                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页", color=SLATE),
                 ft.Button(
                     "下一页",
                     disabled=self.current >= self.pagination.total_page,
-                    on_click=lambda e: self.set_current(self.current + 1), color='#999999'
+                    on_click=lambda e: self.set_current(self.current + 1), color=SLATE
                 ),
             ])
         )

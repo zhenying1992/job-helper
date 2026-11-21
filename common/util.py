@@ -19,7 +19,7 @@ def can_access_dir(dir: Path) -> bool:
         test_file.write_text("test")
         test_file.unlink()
         return True
-    except Exception as ex:
+    except Exception:
         return False
 
 

@@ -1,5 +1,10 @@
 import flet as ft
 
+from theme import (
+    ACCENT_BRIGHT, BG_DIALOG, TEXT_TAB_ACTIVE, TEXT_TAB_INACTIVE, TEXT_TITLE,
+    FS_TAB, FS_DISPLAY, glow, GLOW_SOFT,
+)
+
 
 class Header:
     def get_active_key(self):
@@ -31,21 +36,17 @@ class Header:
                     [
                         ft.Text(
                             label,
-                            size=15,
+                            size=FS_TAB,
                             weight=ft.FontWeight.BOLD if is_active else ft.FontWeight.W_400,
-                            color="#F5FAFF" if is_active else "#54739E",
+                            color=TEXT_TAB_ACTIVE if is_active else TEXT_TAB_INACTIVE,
                         ),
                         ft.Container(
                             width=72,
                             height=2,
-                            bgcolor="#40C9FF",
+                            bgcolor=ACCENT_BRIGHT,
                             border_radius=2,
                             visible=is_active,
-                            shadow=ft.BoxShadow(
-                                spread_radius=1,
-                                blur_radius=18,
-                                color="#40C9FF",
-                            ),
+                            shadow=glow(ACCENT_BRIGHT, blur=18),
                         ),
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
@@ -58,12 +59,16 @@ class Header:
 
     def build(self):
         return ft.Container(
-            bgcolor="#111834",
+            bgcolor=BG_DIALOG,
             padding=ft.Padding(16, 10, 16, 10),
             content=ft.Row(
                 [
                     # 左侧标题
-                    ft.Text("工作小助手", color="#CFD8FF", size=26, weight=ft.FontWeight.BOLD),
+                    ft.Text(
+                        "工作小助手", color=TEXT_TITLE, size=FS_DISPLAY,
+                        weight=ft.FontWeight.BOLD,
+                        style=ft.TextStyle(shadow=glow(ACCENT_BRIGHT, blur=12)),
+                    ),
                     ft.Container(width=32),  # 标题和tab之间留白
                     self.build_tab("大盘概览", "/overview", "overview"),
                     ft.Container(width=24),
@@ -85,8 +90,7 @@ def layout():
     return ft.Column(
         [
             Header().build(),
-            ft.Container(content=outlet, padding=20),
-            ft.Text("Footer - (c) 2026", text_align=ft.TextAlign.CENTER),
+            ft.Container(content=outlet, padding=20, expand=True),
         ],
         spacing=0,
         tight=True

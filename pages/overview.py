@@ -5,10 +5,14 @@ from flet import TextAlign
 from flet_charts import *
 
 from common.util import datetime_2_date_str
-from constant import *
+from constant import *  # noqa: F403  枚举/日期格式/统计参数
 from data.model import Job
 from data.service import JobService, TaskService
-from pages.job import COLOR_TEXT, BG_PANEL, BORDER_RADIUS
+from theme import (
+    BG_CARD, BG_CHART, BORDER_ACCENT, MUTED, ACCENT, SLATE, TEXT_BRIGHT,
+    FS_BASE, FS_METRIC, FS_XL, FS_MD, FS_SM, glow, GLOW_SOFT,
+    RADIUS_MD, FONT_MONO,
+)
 
 
 @ft.component
@@ -32,17 +36,19 @@ class Top:
         return ft.Container(
             width=220, height=120, padding=16,
             border=ft.Border(
-                left=ft.BorderSide(1, "#22d3ee88"),
-                right=ft.BorderSide(1, "#22d3ee88"),
-                top=ft.BorderSide(1, "#22d3ee88"),
-                bottom=ft.BorderSide(1, "#22d3ee88"),
+                left=ft.BorderSide(1, BORDER_ACCENT),
+                right=ft.BorderSide(1, BORDER_ACCENT),
+                top=ft.BorderSide(1, BORDER_ACCENT),
+                bottom=ft.BorderSide(1, BORDER_ACCENT),
             ),
-            border_radius=6,
-            bgcolor="#111827",
+            border_radius=RADIUS_MD,
+            bgcolor=BG_CARD,
+            shadow=glow(GLOW_SOFT, blur=20),
             content=ft.Column(
                 [
-                    ft.Text(title, size=14, color="#94a3b8"),
-                    ft.Text(str(value), size=40, weight=ft.FontWeight.BOLD, color="#22d3ee"),
+                    ft.Text(title, size=FS_BASE, color=MUTED),
+                    ft.Text(str(value), size=FS_METRIC, weight=ft.FontWeight.BOLD,
+                            color=ACCENT, font_family=FONT_MONO),
                 ],
                 alignment=ft.MainAxisAlignment.CENTER
             ),
@@ -70,7 +76,7 @@ class Center:
             ft.Container(
                 width=340,
                 height=330,
-                bgcolor="#111827",
+                bgcolor=BG_CARD,
                 border_radius=8,
                 padding=20,
                 content=self.build_left(),
@@ -81,51 +87,42 @@ class Center:
                 height=330,
                 border_radius=BORDER_RADIUS,
                 padding=20,
-                # border=ft.border.all(1, "#254b80"),
                 content=self.build_right(),
             )
         ], spacing=16)
 
     # 左边
+    normal_radius = 80
+    hover_radius = 90
+    normal_title_style = ft.TextStyle(size=FS_MD, color=TEXT_BRIGHT)
+    hover_title_style = ft.TextStyle(size=FS_BASE, color=TEXT_BRIGHT, weight=ft.FontWeight.BOLD)
+
     def build_left(self):
-        # 悬浮样式
-        hover_radius = 90
-        hover_title_style = ft.TextStyle(size=14, color=ft.Colors.WHITE, weight=ft.FontWeight.BOLD)
-
-        def on_hover(e):
-            for idx, s in enumerate(chart.sections):
-                if idx == e.section_index:
-                    s.radius = hover_radius
-                    s.title_style = hover_title_style
-                else:
-                    s.radius = normal_radius
-                    s.title_style = normal_title_style
-            chart.update()
-
         chart = PieChart(
             sections=self.get_left_data(),
-            # 扇区间隔缝隙
             sections_space=2,
-            # 圆环：中间空白大小，0=实心饼图
             center_space_radius=40,
-            # 中间文字
-            # center_space=ft.Text("任务统计", color="#cbd5e1", size=14),
-            # on_chart_event=on_hover,
             expand=True,
         )
 
+        def on_hover(e):
+            for idx, section in enumerate(chart.sections):
+                active = idx == e.section_index
+                section.radius = self.hover_radius if active else self.normal_radius
+                section.title_style = self.hover_title_style if active else self.normal_title_style
+            chart.update()
+
+        chart.on_chart_event = on_hover
+
         return ft.Column([
-            ft.Text("任务分布饼图", color="#3b82f6", size=16, weight=ft.FontWeight.BOLD),
-            chart
+            ft.Text("任务分布饼图", color=COLOR_PRIMARY, size=FS_XL, weight=ft.FontWeight.BOLD),
+            chart,
         ])
 
     def get_left_data(self):
-        normal_radius = 80
-        normal_title_style = ft.TextStyle(size=12, color=ft.Colors.WHITE)
-
         return [
-            PieChartSection(value=value, title=status, color="#3b82f6", radius=normal_radius,
-                            title_style=normal_title_style)
+            PieChartSection(value=value, title=status, color=Status.color(status),
+                            radius=self.normal_radius, title_style=self.normal_title_style)
             for status, value in JobService.ratio().items()
         ]
 
@@ -133,12 +130,11 @@ class Center:
     def build_right(self):
         return ft.Column(
             controls=[
-                ft.Text("工作进展", size=16, color="#22d3ee"),
+                ft.Text("工作进展", size=FS_XL, color=ACCENT),
                 LineChart(
                     data_series=[self.get_right_job_data(), self.get_right_task_data()],
                     left_axis=ChartAxis(labels=[], show_labels=False),
-                    bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TRENT_DAY, bgcolor="#0b1224",
-                    # border=ft.border.all(1, "#254b80"),
+                    bottom_axis=ChartAxis(labels=self.get_right_labels()), min_x=0, max_x=TREND_DAY, bgcolor=BG_CHART,
                     height=250
                 )
             ])
@@ -157,7 +153,7 @@ class Center:
         )
 
     def get_right_task_data(self):
-        data = TaskService.finish_trend(TRENT_DAY)
+        data = TaskService.finish_trend(TREND_DAY)
 
         return LineChartData(
             points=[
@@ -171,11 +167,11 @@ class Center:
 
     def get_right_labels(self):
         labels = []
-        data = JobService.finish_trend(days=TRENT_DAY)
+        data = JobService.finish_trend(days=TREND_DAY)
 
         for idx, day in enumerate(data.keys()):
             day = day.split("-")[-1]  # 取日
-            l = ChartAxisLabel(value=idx, label=ft.Text(day, color=COLOR_TEXT, size=11))
+            l = ChartAxisLabel(value=idx, label=ft.Text(day, color=COLOR_TEXT, size=FS_SM))
             labels.append(l)
 
         return labels
@@ -189,13 +185,13 @@ class Bottom:
                 height=300,
                 padding=16,
                 border=ft.Border(
-                    left=ft.BorderSide(1, "#22d3ee88"),
-                    right=ft.BorderSide(1, "#22d3ee88"),
-                    top=ft.BorderSide(1, "#22d3ee88"),
-                    bottom=ft.BorderSide(1, "#22d3ee88"),
+                    left=ft.BorderSide(1, BORDER_ACCENT),
+                    right=ft.BorderSide(1, BORDER_ACCENT),
+                    top=ft.BorderSide(1, BORDER_ACCENT),
+                    bottom=ft.BorderSide(1, BORDER_ACCENT),
                 ),
                 border_radius=6,
-                bgcolor="#111827",
+                bgcolor=BG_CARD,
                 content=self.build_left()
             ),
             ft.Container(
@@ -203,13 +199,13 @@ class Bottom:
                 height=300,
                 padding=16,
                 border=ft.Border(
-                    left=ft.BorderSide(1, "#22d3ee88"),
-                    right=ft.BorderSide(1, "#22d3ee88"),
-                    top=ft.BorderSide(1, "#22d3ee88"),
-                    bottom=ft.BorderSide(1, "#22d3ee88"),
+                    left=ft.BorderSide(1, BORDER_ACCENT),
+                    right=ft.BorderSide(1, BORDER_ACCENT),
+                    top=ft.BorderSide(1, BORDER_ACCENT),
+                    bottom=ft.BorderSide(1, BORDER_ACCENT),
                 ),
                 border_radius=6,
-                bgcolor="#111827",
+                bgcolor=BG_CARD,
                 content=self.build_right()
             )
         ], spacing=16)
@@ -217,7 +213,7 @@ class Bottom:
     # 左边
     def build_left(self):
         return ft.Column([
-            ft.Text("最新更新工作", size=16, color="#22d3ee"),
+            ft.Text("最新更新工作", size=FS_XL, color=ACCENT),
             ft.ListView(
                 controls=[self.build_latest_job_row(job) for job in JobService.latest()],
                 spacing=4,
@@ -229,44 +225,39 @@ class Bottom:
             data=job,
             on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}"),
             padding=10,
-            border_radius=4,  # hover_color="#1e293b",
-            content=ft.Row([  # ft.Container(width=10, height=10, bgcolor=item["status_color"], border_radius=99),
+            border_radius=4,
+            content=ft.Row([
                 ft.Container(width=10, height=10, border_radius=99), ft.Container(width=10),
                 ft.Column(
                     [
                         ft.Text(
                             job.name,
-                            color="#22d3ee",
-                            size=14,
+                            color=ACCENT,
+                            size=FS_BASE,
                             weight=ft.FontWeight.W_500,
                             max_lines=1,
                             overflow=ft.TextOverflow.ELLIPSIS
                         ),
                         ft.Text(
                             f"{job.type} | {datetime_2_date_str(job.updated_time, DATE_TIME_FMT)} | {job.updated_content}",
-                            size=11,
-                            color="#94a3b8"),
+                            size=FS_SM,
+                            color=MUTED),
                     ],
                     expand=True),
-                # ft.Text(job.status, size=12, color=item["status_color"]),
-                ft.Text(job.status, size=12),
-                ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=14, color="#64748b"),
+                ft.Text(job.status, size=FS_MD),
+                ft.Icon(ft.Icons.ARROW_FORWARD_IOS, size=FS_BASE, color=SLATE),
             ]),
         )
 
     # 右边
     def build_right(self):
         return ft.Column([
-            ft.Text("即将逾期工作", size=16, color="#22d3ee"),
+            ft.Text("即将逾期工作", size=FS_XL, color=ACCENT),
             ft.Row([
-                ft.Text("名称", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=160),
-                ft.Text("类型", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=180),
-                ft.Text("优先级", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=80),
-                ft.Text("结束时间", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=140),
-                ft.Text("剩余时长", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=100),
-                ft.Text("状态", size=12, color="#94a3b8", text_align=TextAlign.CENTER, width=100),
-                ft.Container(width=20),
-            ]),
+                ft.Text(h, size=FS_MD, color=MUTED, text_align=TextAlign.CENTER, width=w)
+                for h, w in (("名称", 160), ("类型", 180), ("优先级", 80),
+                             ("结束时间", 140), ("剩余时长", 100), ("状态", 100))
+            ] + [ft.Container(width=20)]),
             ft.ListView(
                 controls=[self.build_expire_job(job) for job in JobService.expire()],
                 spacing=6,
@@ -283,22 +274,29 @@ class Bottom:
             text, color = str(day), COLOR_SAFE
 
         return ft.Row([
-            ft.TextButton(
-                job.name,
+            ft.Container(
                 width=160,
-                on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}")
+                tooltip=job.name,
+                on_click=lambda e: ft.context.page.navigate(f"/job/{job.id}"),
+                content=ft.Text(
+                    job.name,
+                    size=FS_MD,
+                    color=ACCENT,
+                    max_lines=1,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
             ),
-            ft.Text(job.type, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=180),
-            ft.Text(job.priority, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=80),
-            ft.Text(job.end_time.strftime("%Y-%m-%d"), size=12, color="#cbd5e1", text_align=TextAlign.CENTER,
+            ft.Text(job.type, size=FS_MD, color=COLOR_TEXT, text_align=TextAlign.CENTER, width=180),
+            ft.Text(job.priority, size=FS_MD, color=COLOR_TEXT, text_align=TextAlign.CENTER, width=80),
+            ft.Text(job.end_time.strftime("%Y-%m-%d"), size=FS_MD, color=COLOR_TEXT, text_align=TextAlign.CENTER,
                     width=140),
             ft.Text(
                 text,
-                size=12,
+                size=FS_MD,
                 color=color,
                 width=100,
                 text_align=TextAlign.CENTER,
             ),
-            ft.Text(job.status, size=12, color="#cbd5e1", text_align=TextAlign.CENTER, width=100),
-            ft.Icon(ft.Icons.WARNING_AMBER, size=14, color=COLOR_WARN) if day < 3 else ft.Container(width=20),
+            ft.Text(job.status, size=FS_MD, color=COLOR_TEXT, text_align=TextAlign.CENTER, width=100),
+            ft.Icon(ft.Icons.WARNING_AMBER, size=FS_BASE, color=COLOR_WARN) if day < 3 else ft.Container(width=20),
         ])

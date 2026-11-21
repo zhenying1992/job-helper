@@ -4,7 +4,8 @@
 - 固定 6 行 × 7 列，从「当月 1 号所在周的周一」开始铺 42 天
 - 任务条按自然周切段，跨周处用 ‹ › 标记，首尾段才带圆角
 - 同一周内时间重叠的任务自动往下排泳道，超过 3 条折叠为 +N
-- 状态色：待开始 / 进行中 / 已完成 / 已暂停 / 逾期
+- 图例按工作流顺序：未开始→执行中→阻塞中→已完成→逾期（见 LEGEND_ORDER）
+- 历史状态名（待开始/进行中等）在读取时由 Status.normalize 归一化，图例只显示现行枚举
 - 列宽随窗口自适应，留 176 的最小宽度；更窄则整体横向滚动
 - 星期头与网格放在同一个滚动容器里，拖动时一起移动
 - 日期标签绘制在任务条之上，永不被遮挡
@@ -12,6 +13,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -19,9 +21,19 @@ from typing import Optional
 import flet as ft
 
 from common.decorate import catch_error
-from constant import BG_PANEL, BORDER_RADIUS, COLOR_PRIMARY, COLOR_TEXT
-from data.model import Job, Task
+from constant import (
+    BG_PANEL, BORDER_RADIUS, COLOR_DANGER, COLOR_PRIMARY, COLOR_TEXT, OVERDUE, Status,
+)
+from data.model import Task
 from data.service import TaskService
+from theme import (
+    BG_CELL, BG_CELL_DIM, BG_TODAY, BORDER_SOFT as LINE, MUTED as TXT_DAY,
+    TEXT_WEEKEND as TXT_DAY_WEEKEND, TEXT_DIM as TXT_DAY_DIM,
+    BG_CANVAS, BORDER_STRONG, ACCENT, SLATE, TEXT_SUBTLE,
+    FS_XS, FS_SM, FS_MD, FS_XL,
+)
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------- 版式常量
 MIN_COL_W = 176      # 单格最小宽（窗口再窄就横向滚动）
@@ -40,23 +52,9 @@ OUTER_PAD = 40
 # 窗口宽度未知时的兜底宽度
 DEFAULT_WIN_W = 1280
 
-BG_CELL = "#0e1a2d"
-BG_CELL_DIM = "#0b1526"
-BG_TODAY = "#0c2635"
-LINE = "#16243a"
-TXT_DAY = "#94a3b8"
-TXT_DAY_WEEKEND = "#7f8fa6"
-TXT_DAY_DIM = "#3b4a63"
-
-# 状态 → 颜色。请按 constant.Status.list() 的实际值对齐，键名不一致时会被兜底成灰色。
-STATUS_COLOR = {
-    "待开始": "#94a3b8",
-    "进行中": "#22d3ee",
-    "已完成": "#22c55e",
-    "已暂停": "#fbbf24",
-    "逾期": "#ef4444",
-}
-COLOR_UNKNOWN = "#64748b"
+# 图例按工作流顺序展示：未开始→执行中→阻塞中→已完成，逾期作为派生状态附在最后
+LEGEND_ORDER = [Status.NOT_START, Status.EXECUTING, Status.BLOCKED, Status.FINISHED]
+LEGEND_NAMES = LEGEND_ORDER + [OVERDUE]
 
 # 未完成且已过截止时间的任务，是否自动按「逾期」渲染。
 # 打开后，历史上所有过期未完成的任务都会变红；按需开启。
@@ -113,18 +111,21 @@ def _month_window(year: int, month: int) -> list[date]:
 
 
 def _status_of(task: Task) -> str:
-    name = (getattr(task, "status", "") or "").strip()
-    if not AUTO_OVERDUE or not name or name == "已完成":
+    """归一化任务状态；逾期开启时对过期未完成任务派生 OVERDUE。"""
+    name = Status.normalize(getattr(task, "status", "") or "")
+    if not AUTO_OVERDUE or not name or name == Status.FINISHED:
         return name
     end = _as_date(getattr(task, "end_time", None))
     if end is not None and end < date.today():
-        return "逾期"
+        return OVERDUE
     return name
 
 
 def _color_of(status: str) -> str:
-    """状态名 → 颜色，未知状态兜底成灰色。"""
-    return STATUS_COLOR.get(status, COLOR_UNKNOWN)
+    """状态名 → 颜色，与全局枚举保持一致。"""
+    if status == OVERDUE:
+        return COLOR_DANGER
+    return Status.color(status)
 
 
 def _build_segments(tasks: list[Task], cells: list[date]) -> list[_Seg]:
@@ -272,9 +273,7 @@ def calendar_view():
     cache_key = (year, month, rev, hidden)
     calc = calc_ref.current
     if calc is not None and calc[0] == cache_key:
-        tasks, cells, segs, month_count, legend_names = (
-            calc[1], calc[2], calc[3], calc[4], calc[5],
-        )
+        tasks, cells, segs, month_count = calc[1:]
     else:
         tasks = TaskService.filter()
         cells = _month_window(year, month)
@@ -294,13 +293,7 @@ def calendar_view():
             if s and e and not (e < month_first or s > month_last):
                 month_count += 1
 
-        # 图例项：内置 5 个状态 + 数据里出现的其他状态值（避免状态名对不上时漏项）
-        names = list(STATUS_COLOR.keys())
-        extra = {_status_of(t) for t in tasks} - set(names)
-        extra.discard("")
-        legend_names = names + sorted(extra)
-
-        calc_ref.current = (cache_key, tasks, cells, segs, month_count, legend_names)
+        calc_ref.current = (cache_key, tasks, cells, segs, month_count)
 
     def goto(delta: int):
         set_ym(lambda cur: _shift_month(cur, delta))
@@ -318,7 +311,7 @@ def calendar_view():
             )
         except Exception as ex:
             # 不想静默失败：导入路径或 dialog 签名不对时能立刻看到
-            print(f"[calendar] 打开任务编辑失败: {ex!r}")
+            logger.exception("打开任务编辑失败")
 
     def open_cell_list(tasks: list[Task], e):
         """点 +N 更多 → 在鼠标位置弹一张清单卡，列出被折叠的任务，逐条可点进编辑。"""
@@ -364,12 +357,12 @@ def calendar_view():
             left=left,
             top=top,
             width=card_w,
-            bgcolor="#0b1220",
+            bgcolor=BG_CANVAS,
             border=ft.Border(
-                top=ft.BorderSide(1, "#1e3a5f"),
-                right=ft.BorderSide(1, "#1e3a5f"),
-                bottom=ft.BorderSide(1, "#1e3a5f"),
-                left=ft.BorderSide(1, "#1e3a5f"),
+                top=ft.BorderSide(1, BORDER_STRONG),
+                right=ft.BorderSide(1, BORDER_STRONG),
+                bottom=ft.BorderSide(1, BORDER_STRONG),
+                left=ft.BorderSide(1, BORDER_STRONG),
             ),
             border_radius=8,
             padding=ft.Padding(left=12, top=10, right=12, bottom=10),
@@ -377,7 +370,7 @@ def calendar_view():
                 controls=[
                     ft.Row(
                         controls=[
-                            ft.Text(f"当日 {len(dedup)} 个任务", size=11, color="#64748b"),
+                            ft.Text(f"当日 {len(dedup)} 个任务", size=FS_SM, color=SLATE),
                             ft.Container(expand=True),
                             ft.TextButton("×", on_click=close, width=24, height=24),
                         ],
@@ -439,7 +432,7 @@ def calendar_view():
                         )
                     task.save()
             except Exception as ex:
-                print(f"[calendar] 调整日期失败: {ex!r}")
+                logger.exception("调整任务日期失败")
 
     def make_handle(
         seg: _Seg,
@@ -540,16 +533,16 @@ def calendar_view():
                 tip = ft.Container(
                     left=0,
                     top=0,
-                    bgcolor="#0b1220",
+                    bgcolor=BG_CANVAS,
                     border=ft.Border(
-                        top=ft.BorderSide(1, "#22d3ee"),
-                        right=ft.BorderSide(1, "#22d3ee"),
-                        bottom=ft.BorderSide(1, "#22d3ee"),
-                        left=ft.BorderSide(1, "#22d3ee"),
+                        top=ft.BorderSide(1, ACCENT),
+                        right=ft.BorderSide(1, ACCENT),
+                        bottom=ft.BorderSide(1, ACCENT),
+                        left=ft.BorderSide(1, ACCENT),
                     ),
                     border_radius=6,
                     padding=ft.Padding(left=10, top=5, right=10, bottom=5),
-                    content=ft.Text("", size=11, color="#22d3ee", weight=ft.FontWeight.W_500),
+                    content=ft.Text("", size=FS_SM, color=ACCENT, weight=ft.FontWeight.W_500),
                 )
                 st["tip"] = tip
                 _overlay_add(tip)
@@ -674,7 +667,7 @@ def calendar_view():
                 mouse_cursor=ft.MouseCursor.CLICK,
                 on_tap=lambda e, r=row, c=col, tl=tasks: open_cell_list(tl, e),
                 content=ft.Container(
-                    content=ft.Text(f"+{len(tasks)} 更多", size=10, color="#64748b"),
+                    content=ft.Text(f"+{len(tasks)} 更多", size=FS_XS, color=SLATE),
                 ),
             )
         )
@@ -733,7 +726,7 @@ def calendar_view():
                 ft.Row(
                     controls=[
                         ft.Text("任务日历", size=16, weight=ft.FontWeight.BOLD, color=COLOR_PRIMARY),
-                        ft.Text("月度视图", size=12, color="#475569"),
+                        ft.Text("月度视图", size=FS_MD, color=TEXT_SUBTLE),
                     ],
                     spacing=8,
                 ),
@@ -742,7 +735,7 @@ def calendar_view():
                     controls=[
                         ft.IconButton(
                             ft.Icons.CHEVRON_LEFT,
-                            icon_color="#94a3b8",
+                            icon_color=TXT_DAY,
                             icon_size=18,
                             on_click=lambda e: goto(-1),
                         ),
@@ -758,7 +751,7 @@ def calendar_view():
                         ),
                         ft.IconButton(
                             ft.Icons.CHEVRON_RIGHT,
-                            icon_color="#94a3b8",
+                            icon_color=TXT_DAY,
                             icon_size=18,
                             on_click=lambda e: goto(1),
                         ),
@@ -771,7 +764,7 @@ def calendar_view():
                 ft.Row(
                     controls=[
                         ft.Container(width=7, height=7, bgcolor=COLOR_PRIMARY, border_radius=4),
-                        ft.Text(f"本月 {month_count} 个任务", size=12, color="#94a3b8"),
+                        ft.Text(f"本月 {month_count} 个任务", size=FS_MD, color=TXT_DAY),
                     ],
                     spacing=6,
                 ),
@@ -784,7 +777,7 @@ def calendar_view():
     weekhead = ft.Row(
         controls=[
             ft.Container(
-                ft.Text(w, size=12, color="#22d3ee" if i >= 5 else "#64748b"),
+                ft.Text(w, size=FS_MD, color=ACCENT if i >= 5 else SLATE),
                 width=col_w,
                 height=34,
                 alignment=ft.Alignment.CENTER,
@@ -816,8 +809,8 @@ def calendar_view():
                     ),
                     ft.Text(
                         name,
-                        size=12,
-                        color="#94a3b8" if on else "#3b4a63",
+                        size=FS_MD,
+                        color=TXT_DAY if on else TXT_DAY_DIM,
                     ),
                 ],
                 spacing=7,
@@ -825,13 +818,13 @@ def calendar_view():
         )
 
     legend = ft.Row(
-        controls=[legend_item(n) for n in legend_names]
+        controls=[legend_item(n) for n in LEGEND_NAMES]
         + [
             ft.Container(expand=True),
             ft.Text(
                 "点击图例筛选状态 · 跨周任务按周断开，首尾带 ‹ › 标记",
-                size=11,
-                color="#475569",
+                size=FS_SM,
+                color=TEXT_SUBTLE,
             ),
         ],
         spacing=24,

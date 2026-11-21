@@ -3,6 +3,7 @@ import flet as ft
 
 from config import get_work_dir
 from pages.init import InitView
+from theme import BG_PAGE
 import logging
 
 
@@ -11,7 +12,7 @@ logger = logging.getLogger(__name__)
 def main(page: ft.Page):
     page.padding=0
     page.margin=0
-    page.bgcolor = "#0B1020"
+    page.bgcolor = BG_PAGE
     page.window.min_width = 1000
 
     if not get_work_dir():

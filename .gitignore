@@ -31,4 +31,4 @@ dist/
 src/db.sqlite3
 src/sqlite.db
 
-requirements
+.workbuddy
