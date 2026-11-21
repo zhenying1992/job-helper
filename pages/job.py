@@ -19,7 +19,7 @@ from pages.task.list import task_list_view
 from pages.task.topo import TaskTopo
 from theme import (
     ACCENT as ACTIVE, MUTED as INACTIVE, BG_HEADER_BAR, BORDER,
-    FS_XL, FS_MD, FONT_MONO, BTN_TEXT, RADIUS_SM, glow,
+    FS_XL, FS_MD, FONT_MONO, BTN_TEXT, TEXT_BRIGHT, RADIUS_SM, glow,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,13 +62,20 @@ def job_view():
     def bump():
         set_refresh_flag(refresh_flag + 1)
 
+    # 右侧面板高度 = 窗口高度 - 顶栏 / 内容区内边距 / 详情顶栏等固定开销。
+    # 注意：不能用 Row 的 STRETCH 去撑满——Flet 1.0.3 下 STRETCH 会打断右侧
+    # 主视图的 expand 高度链，导致整块塌陷为空（历史踩坑）。改用明确高度。
+    page = ft.context.page
+    panel_h = max(int(getattr(page, "height", 0) or 900) - 168, 460)
+
     return ft.Column([
         HeaderBar(job).build(),
         ft.Row([
             Left(job, bump).build(),
             ft.Container(width=20),
-            Right(job, views, current_view, set_current_view, refresh_flag, bump).build(),
-        ], expand=True),
+            Right(job, views, current_view, set_current_view, refresh_flag, bump,
+                  panel_h).build(),
+        ], expand=True, vertical_alignment=ft.CrossAxisAlignment.START),
     ], expand=True)
 
 
@@ -122,6 +129,7 @@ def JobDetails(job: Job, bump=None):
                     options=[ft.DropdownOption(key=p, text=p) for p in Priority.list()],
                     on_select=lambda e, f=field: drafts.__setitem__(f, e.control.value),
                     dense=True, text_size=12, width=76, height=36,
+                    color=TEXT_BRIGHT,
                     content_padding=ft.Padding(4, 0, 4, 0),
                 )
             else:
@@ -129,6 +137,7 @@ def JobDetails(job: Job, bump=None):
                     value=drafts.get(field, getattr(job, field)),
                     on_change=lambda e, f=field: drafts.__setitem__(f, e.control.value),
                     width=118, height=34, text_size=13,
+                    color=TEXT_BRIGHT, cursor_color=ACTIVE,
                     content_padding=ft.Padding(6, 4, 6, 4),
                 )
             return ft.Row([
@@ -201,7 +210,7 @@ class HeaderBar:
                              bgcolor=ACTIVE, border_radius=4, shadow=glow(ACTIVE, blur=10)),
                 ft.Container(width=12),
                 ft.Text(f"进度：{self.job.progress}%", color=COLOR_TEXT, font_family=FONT_MONO),
-                ft.Container(expand=True),
+                ft.Container(width=8),
                 ft.PopupMenuButton(
                     icon=ft.Icons.MORE_VERT,
                     items=[
@@ -309,17 +318,20 @@ class Left:
 
 
 class Right:
-    def __init__(self, job, views, current_view, set_current_view, refresh_flag, bump):
+    def __init__(self, job, views, current_view, set_current_view, refresh_flag, bump, panel_h=610):
         self.job = job
         self.views = views
         self.current_view = current_view
         self.set_current_view = set_current_view
         self.refresh_flag = refresh_flag
         self.bump = bump
+        self.panel_h = panel_h
 
     def build(self):
+        # 用明确高度填满可用空间（由外层按窗口高度算好），保持已知可工作的内部
+        # 高度链：外层 Column 不 expand，主视图 Container expand + 左上对齐。
         return ft.Container(
-            height=610,
+            height=self.panel_h,
             bgcolor=BG_PANEL, border_radius=BORDER_RADIUS, padding=20,
             content=ft.Column([
                 self._switch_bar(),
