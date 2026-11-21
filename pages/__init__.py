@@ -51,7 +51,7 @@ class Header:
                     ],
                     alignment=ft.MainAxisAlignment.CENTER,
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=6,
+                    spacing=2,
                 ),
             ),
         )
@@ -90,7 +90,7 @@ def layout():
     return ft.Column(
         [
             Header().build(),
-            ft.Container(content=outlet, padding=20, expand=True),
+            ft.Container(content=outlet, padding=15, expand=True),
         ],
         spacing=0,
         tight=True

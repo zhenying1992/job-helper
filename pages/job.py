@@ -116,11 +116,25 @@ def JobDetails(job: Job, bump=None):
         if bump:
             bump()
 
+    # 统一行高与标签宽度，保证 label 与内容在所有行严格对齐、行距一致
+    LABEL_W = 56
+    ROW_H = 30
+
+    def _label(text: str) -> ft.Control:
+        return ft.Text(text, color=COLOR_TEXT, size=13, width=LABEL_W,
+                       no_wrap=True)
+
+    def _field(label: str, value: ft.Control) -> ft.Control:
+        """普通字段行：固定宽标签 + 内容，行高统一。"""
+        return ft.Row([
+            _label(f"{label}:"), value,
+        ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
+
     def editable(label: str, field: str):
         """展示态文本 + 编辑按钮；编辑态紧凑输入框/选择器 + 保存/取消。
 
-        展示态文本 expand 占据卡片内容区剩余宽度，长文本按 ELLIPSIS 截断，
-        不再撑破 300px 卡片。优先级编辑态用 dense Dropdown，比普通下拉更紧凑。
+        所有态都用固定宽度的标签 + 统一行高，避免行距参差和 label 换行。
+        展示态文本 expand 占据剩余宽度，长文本按 ELLIPSIS 截断。
         """
         if editing == field:
             if field == 'priority':
@@ -128,7 +142,7 @@ def JobDetails(job: Job, bump=None):
                     value=drafts.get(field, getattr(job, field)),
                     options=[ft.DropdownOption(key=p, text=p) for p in Priority.list()],
                     on_select=lambda e, f=field: drafts.__setitem__(f, e.control.value),
-                    dense=True, text_size=12, width=76, height=36,
+                    dense=True, text_size=12, width=76, height=34,
                     color=TEXT_BRIGHT,
                     content_padding=ft.Padding(4, 0, 4, 0),
                 )
@@ -141,45 +155,48 @@ def JobDetails(job: Job, bump=None):
                     content_padding=ft.Padding(6, 4, 6, 4),
                 )
             return ft.Row([
-                ft.Text(f"{label}:", color=COLOR_TEXT, size=12, width=34),
+                _label(f"{label}:"),
                 box,
                 ft.IconButton(ft.Icons.CHECK, icon_color=COLOR_SUCCESS, icon_size=15,
-                              width=28, tooltip="保存", on_click=lambda e, f=field: save(f)),
+                              width=24, height=ROW_H, tooltip="保存",
+                              on_click=lambda e, f=field: save(f)),
                 ft.IconButton(ft.Icons.CLOSE, icon_color=INACTIVE, icon_size=15,
-                              width=28, tooltip="取消", on_click=lambda e: set_editing('')),
-            ], spacing=2)
+                              width=24, height=ROW_H, tooltip="取消",
+                              on_click=lambda e: set_editing('')),
+            ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=2)
         return ft.Row([
-            ft.Text(f"{label}: {getattr(job, field)}", color=COLOR_TEXT, size=13,
+            _label(f"{label}:"),
+            ft.Text(getattr(job, field) or '—', color=COLOR_TEXT, size=13,
                     max_lines=2, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
             ft.IconButton(ft.Icons.EDIT, icon_color=INACTIVE, icon_size=14,
+                          width=24, height=ROW_H,
                           tooltip=f"编辑{label}", on_click=lambda e, f=field: start(f)),
-        ], spacing=2)
+        ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=2)
 
     return ft.Container(
         width=300, bgcolor=BG_PANEL, border_radius=BORDER_RADIUS, padding=20,
         content=ft.Column([
             ft.Text("工作详情", color=COLOR_PRIMARY, size=FS_XL, weight=ft.FontWeight.BOLD),
             ft.Divider(color=BORDER, height=1),
-            ft.Container(height=6),
+            ft.Container(height=4),
             editable("名称", "name"),
             editable("描述", "description"),
             editable("优先级", "priority"),
-            ft.Text(f"开始时间: {datetime_2_date_str(job.start_time, DATE_FMT)}",
-                    color=COLOR_TEXT, size=13),
-            ft.Text(f"结束时间: {datetime_2_date_str(job.end_time, DATE_FMT)}",
-                    color=COLOR_TEXT, size=13),
-            ft.Container(height=4),
+            _field("开始时间", ft.Text(datetime_2_date_str(job.start_time, DATE_FMT),
+                                    color=COLOR_TEXT, size=13)),
+            _field("结束时间", ft.Text(datetime_2_date_str(job.end_time, DATE_FMT),
+                                    color=COLOR_TEXT, size=13)),
             ft.Row([
-                ft.Text("进度: ", color=COLOR_TEXT, size=13),
+                _label("进度:"),
                 ft.Stack([
                     ft.ProgressBar(bar_height=12, width=160, value=job.progress / 100,
                                    bgcolor=BORDER,
                                    color=COLOR_SUCCESS if job.progress == 100 else COLOR_PRIMARY),
                     ft.Text(f"{job.progress}%", size=11),
                 ], width=160, alignment=ft.Alignment.CENTER),
-            ]),
+            ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
             ft.Row([
-                ft.Text("状态:", color=COLOR_TEXT, size=13),
+                _label("状态:"),
                 ft.Container(
                     ft.Text(job.status, color=BG_HEADER_BAR, size=12,
                             font_family=FONT_MONO, weight=ft.FontWeight.BOLD),
@@ -187,8 +204,8 @@ def JobDetails(job: Job, bump=None):
                     border_radius=RADIUS_SM,
                     padding=ft.Padding(8, 2, 8, 2),
                 ),
-            ], spacing=8),
-        ], spacing=4),
+            ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
+        ], spacing=6),
     )
 
 
@@ -203,14 +220,14 @@ class HeaderBar:
                 ft.TextButton("← 返回", on_click=lambda e: ft.context.page.navigate('/jobs'),
                               style=ft.ButtonStyle(color=INACTIVE)),
                 ft.Text(self.job.name, color=ACTIVE, weight=ft.FontWeight.W_600,
-                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS, expand=True),
+                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                 ft.Container(width=12),
                 ft.Container(ft.Text(self.job.status, color=BG_HEADER_BAR,
                                      font_family=FONT_MONO, weight=ft.FontWeight.BOLD),
                              bgcolor=ACTIVE, border_radius=4, shadow=glow(ACTIVE, blur=10)),
                 ft.Container(width=12),
                 ft.Text(f"进度：{self.job.progress}%", color=COLOR_TEXT, font_family=FONT_MONO),
-                ft.Container(width=8),
+                ft.Container(expand=True),
                 ft.PopupMenuButton(
                     icon=ft.Icons.MORE_VERT,
                     items=[
@@ -366,7 +383,8 @@ class Right:
         if view == 'gantt':
             return TaskGantt(self.job, self.refresh_flag, self.bump).build()
         if view == 'topology':
-            return TaskTopo(self.job).build()
+            # 画布高度按右侧面板可用空间自适应，撑满高度（扣除 padding/切换栏/工具栏）
+            return TaskTopo(self.job, max(self.panel_h - 130, 400)).build()
         if view.startswith('plugin:'):
             plugin = find_for_type(self.job.type)
             return build_view(plugin, self.job) if plugin else ft.Container()

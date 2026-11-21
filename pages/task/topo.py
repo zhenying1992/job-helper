@@ -22,13 +22,14 @@ from theme import (
 
 # 画布尽量撑满工作详情右侧区域；下限保证节点排布空间。
 # 工作详情右侧约为窗口宽 - 左侧 300 - 内边距，取一个偏大的自适应值。
-def _canvas_size() -> tuple[int, int]:
-    # 右侧工作区 ≈ 窗口宽 - 左侧详情 300 - 内边距 ≈ window - 360
+def _canvas_size(height: int | None = None) -> tuple[int, int]:
+    # 宽度：右侧工作区 ≈ 窗口宽 - 左侧详情 300 - 内边距 ≈ window - 360
     try:
         win_w = ft.context.page.window.width or 1280
     except Exception:
         win_w = 1280
-    return max(780, int(win_w) - 360), 560
+    # 高度由调用方按右侧面板高度传入，未传时用默认值（保持其它调用兼容）
+    return max(780, int(win_w) - 360), (height or CANVAS_H)
 
 
 # 导入期无渲染上下文，这里只是兜底；真实尺寸在 FlowEditorView 渲染时取窗口宽度。
@@ -487,9 +488,9 @@ def NodeView(state: EditorState, node: Node):
 
 
 @ft.component
-def FlowEditorView(state: EditorState):
+def FlowEditorView(state: EditorState, canvas_h: int | None = None):
     """整张图：画布 + 命中层 + 全部节点，全部由 state 派生"""
-    canvas_w, canvas_h = _canvas_size()
+    canvas_w, canvas_h = _canvas_size(canvas_h)
     return ft.Column(
         [
             ft.Row(
@@ -536,11 +537,12 @@ def FlowEditorView(state: EditorState):
 # ==================== 挂载入口 ====================
 
 class TaskTopo:
-    def __init__(self, job: Job):
+    def __init__(self, job: Job, canvas_h: int | None = None):
         self.job = job
+        self.canvas_h = canvas_h
         # 状态必须挂在页面级对象上：在 @ft.component 里 new 会每次重渲染都丢
         self.state = EditorState(job=self.job)
         self.state.reload()
 
     def build(self):
-        return FlowEditorView(self.state)
+        return FlowEditorView(self.state, self.canvas_h)

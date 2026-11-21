@@ -19,11 +19,13 @@ import data.db as db_module  # noqa: E402
 db_module.init_db()
 
 import flet as ft  # noqa: E402
+from flet_charts import PieChart  # noqa: E402
 from flet.components.component import Component, Renderer  # noqa: E402
 from flet.controls import context as ctx  # noqa: E402
 
 from data.service import JobService  # noqa: E402
 from pages.urls import get_urls  # noqa: E402
+from pages.overview import Center  # noqa: E402
 
 
 class _FakePage:
@@ -98,6 +100,56 @@ class TestRenderSmoke(unittest.TestCase):
             JobService.update(job.id, status=status)
             with self.subTest(status=status):
                 self.assertEqual(render_route_errors(f"/job/{job.id}"), [])
+
+    def test_pie_hover_state(self):
+        """饼图 hover 纯状态：默认状态名，悬浮显示数量/占比，越界还原。"""
+        items = [("未开始", 15), ("执行中", 3)]
+        titles, radii, tip = Center._pie_state(items, 18, None)
+        self.assertEqual(titles, ["未开始", "执行中"])
+        self.assertEqual(radii, [Center.normal_radius, Center.normal_radius])
+        titles, radii, tip = Center._pie_state(items, 18, 0)
+        self.assertEqual(titles, ["15 (83%)", "执行中"])
+        self.assertEqual(radii, [Center.hover_radius, Center.normal_radius])
+        self.assertIn("83%", tip)
+        titles, _, _ = Center._pie_state(items, 18, -1)
+        self.assertEqual(titles, ["未开始", "执行中"])
+
+    def test_pie_hover_event_does_not_freeze(self):
+        """回归：声明式组件里 hover 回调不得对冻结控件 update()。
+
+        曾在 on_hover 里直接改 section 属性 + chart.update()，触发
+        RuntimeError: Frozen control cannot be updated。用真实 Renderer 展开
+        组件树、派发 hover 事件，确保状态驱动重渲染不再抛该异常。
+        """
+        ctx._context_page.set(_FakePage("/overview"))
+        from pages import overview as ov
+        charts = []
+
+        def walk(node, depth=0):
+            if depth > 25:
+                return
+            if isinstance(node, Component):
+                body = Renderer(node).render(node.fn, *node.args, **node.kwargs)
+                walk(body, depth + 1)
+                return
+            if isinstance(node, PieChart):
+                charts.append(node)
+            for attr in ("controls", "content", "outlet"):
+                value = getattr(node, attr, None)
+                if value is None:
+                    continue
+                for item in (value if isinstance(value, (list, tuple)) else [value]):
+                    walk(item, depth + 1)
+
+        with Renderer().with_context():
+            root = Renderer().render(ov.overview)
+        walk(root)
+        self.assertEqual(len(charts), 1)
+        chart = charts[0]
+        self.assertIsNotNone(chart.on_event)
+        # 真正派发 hover / leave，任何一步抛 Frozen control 都会让测试失败
+        chart.on_event(type("E", (), {"section_index": 0})())
+        chart.on_event(type("E", (), {"section_index": None})())
 
 
 if __name__ == "__main__":

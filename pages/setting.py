@@ -125,35 +125,50 @@ class PluginContent:
                 self._add_plugin(file)
             refresh()
 
+        # (标题, flex)：名称稍宽，描述撑满剩余空间
+        cols = (("名称", 2), ("版本", 1), ("描述", 5), ("安装时间", 2), ("操作", 1))
         columns = [
-            ft.DataColumn(label=ft.Text(title, color=TEXT),
-                          heading_row_alignment=MainAxisAlignment.CENTER)
-            for title in ("名称", "版本", "描述", "安装时间", "操作")
+            ft.DataColumn(
+                label=ft.Container(ft.Text(title, color=TEXT), expand=True,
+                                   alignment=ft.Alignment.CENTER),
+                heading_row_alignment=MainAxisAlignment.CENTER,
+                expand=flex,
+            )
+            for title, flex in cols
         ]
+
+        def cell(text: str, flex: int, *, color=TEXT, align=ft.Alignment.CENTER_LEFT) -> ft.DataCell:
+            return ft.DataCell(ft.Container(
+                ft.Text(text, color=color, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                        tooltip=text),
+                expand=True, alignment=align,
+            ))
+
         rows = [
             ft.DataRow(cells=[
-                ft.DataCell(ft.Text(p.name, color=TEXT)),
-                ft.DataCell(ft.Text(str(p.version), color=TEXT)),
-                ft.DataCell(ft.Text(p.description, color=TEXT)),
-                ft.DataCell(ft.Text(datetime_2_date_str(p.created_time, DATE_TIME_FMT),
-                                    text_align=ft.TextAlign.CENTER, color=TEXT)),
-                ft.DataCell(ft.TextButton(
-                    "删除", on_click=lambda e, plugin=p: self._delete_plugin(plugin, refresh))),
+                cell(p.name, 2, color=ACCENT),
+                cell(str(p.version), 1),
+                cell(p.description, 5),
+                cell(datetime_2_date_str(p.created_time, DATE_TIME_FMT), 2),
+                ft.DataCell(ft.Container(
+                    ft.TextButton("删除", on_click=lambda e, plugin=p: self._delete_plugin(plugin, refresh)),
+                    alignment=ft.Alignment.CENTER,
+                )),
             ])
             for p in plugins
         ]
         table = ft.DataTable(
             columns=columns, rows=rows, expand=True,
             border_radius=RADIUS_MD, bgcolor=BG_TABLE, heading_row_color=BG_TABLE_HEAD,
+            column_spacing=12,
         )
 
         return ft.Column([
             *_section("插件管理", "拖入 .py 插件安装；插件会在对应类型的工作详情页加载为独立视图"),
-            ft.Container(
-                ftd.Dropzone(
-                    content=ft.Container(table, alignment=ft.Alignment.CENTER),
-                    on_dropped=lambda e: add_plugins(e.files),
-                ), expand=True,
+            ftd.Dropzone(
+                content=table,
+                expand=True,
+                on_dropped=lambda e: add_plugins(e.files),
             ),
         ], expand=True, scroll=ft.ScrollMode.AUTO)
 

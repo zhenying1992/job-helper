@@ -52,6 +52,31 @@ def _total(model, status: Optional[str], stale_field: str) -> tuple[int, int]:
     return total, stale
 
 
+def _week_change(model, status: Optional[str] = None, field: str = 'created_time') -> int:
+    """本周数量 - 上周数量（按自然周统计）。
+
+    周一为一周起点；field 决定按哪个时间字段归属周次：
+    总数按 created_time（新增），已完成按 end_time（完成）。
+    返回值 > 0 表示比上周多，< 0 表示更少。用于大盘指标的"相比上周"环比值。
+    """
+    today = datetime.now().date()
+    this_monday = today - timedelta(days=today.weekday())
+    last_monday = this_monday - timedelta(days=7)
+    time_field = getattr(model, field)
+
+    def count_between(start: date, end: date) -> int:
+        condition = [
+            model.deleted == False,  # noqa: E712
+            time_field >= datetime.combine(start, datetime.min.time()),
+            time_field < datetime.combine(end, datetime.min.time()),
+        ]
+        if status:
+            condition.append(model.status == Status.normalize(status))
+        return model.select().where(*condition).count()
+
+    return count_between(this_monday, today + timedelta(days=1)) - count_between(last_monday, this_monday)
+
+
 class LogService:
     """审计日志：记录工作生命周期内的关键操作。"""
 
@@ -213,6 +238,11 @@ class JobService:
         return _total(Job, status, 'updated_time')
 
     @staticmethod
+    def week_change(status: Optional[str] = None, field: str = 'created_time') -> int:
+        """本周相对上周的数量差。field 决定归属周次的依据。"""
+        return _week_change(Job, status, field)
+
+    @staticmethod
     def finish_trend(days: int = TREND_DAY) -> dict[str, int]:
         return _daily_trend(Job, days)
 
@@ -310,6 +340,11 @@ class TaskService:
     @staticmethod
     def total(status: Optional[str] = None) -> tuple[int, int]:
         return _total(Task, status, 'end_time')
+
+    @staticmethod
+    def week_change(status: Optional[str] = None, field: str = 'start_time') -> int:
+        """本周相对上周的数量差。Task 无 created_time，默认按 start_time 归属周次。"""
+        return _week_change(Task, status, field)
 
     @staticmethod
     def finish_trend(days: int = TREND_DAY) -> dict[str, int]:
