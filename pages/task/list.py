@@ -9,7 +9,7 @@ from data.model import Job
 from data.service import TaskService
 from pages.task import CreateTaskDialog, DropTaskDialog, UpdateTaskDialog
 from theme import (
-    BORDER, BG_TABLE, BTN_TEXT, BG_HEADER_BAR, RADIUS_SM, FONT_MONO, FS_SM,
+    BORDER, BG_TABLE, BTN_TEXT, BG_HEADER_BAR, RADIUS_SM, FONT_MONO, FS_SM, FS_MD,
 )
 
 
@@ -79,13 +79,10 @@ class TaskList:
                         ft.DataCell(ft.Text(str(task.id), color=COLOR_TEXT)),
                         ft.DataCell(ft.Text(task.name, color=COLOR_TEXT)),
                         ft.DataCell(
-                            ft.Container(
-                                ft.Text(Status.normalize(task.status), color=BG_HEADER_BAR,
-                                        size=FS_SM, font_family=FONT_MONO,
-                                        weight=ft.FontWeight.BOLD),
-                                bgcolor=Status.color(task.status),
-                                border_radius=RADIUS_SM,
-                                padding=ft.Padding(6, 2, 6, 2),
+                            ft.Text(
+                                Status.normalize(task.status), color=Status.color(task.status),
+                                size=FS_MD, weight=ft.FontWeight.BOLD, width=80,
+                                text_align=ft.TextAlign.CENTER,
                             )
                         ),
                         ft.DataCell(ft.Text(task.assignee or '-', color=COLOR_TEXT)),
