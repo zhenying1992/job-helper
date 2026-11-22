@@ -845,6 +845,12 @@ class TestTopoAndCalendarUi(unittest.TestCase):
         self.assertIn("e.width", src)
         self.assertNotIn("set_win_w(page.width)", src)
 
+    def test_calendar_legend_excludes_overdue(self):
+        """日历底部图例不再展示派生状态「逾期」。"""
+        import pages.calendar as cal
+        self.assertEqual(cal.LEGEND_NAMES, cal.LEGEND_ORDER)
+        self.assertNotIn(cal.OVERDUE, cal.LEGEND_NAMES)
+
 
 class TestRenderSmoke(unittest.TestCase):
     def test_main_routes_render(self):
