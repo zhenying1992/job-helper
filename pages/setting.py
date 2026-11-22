@@ -7,7 +7,6 @@ from pathlib import Path
 
 import flet as ft
 import flet_dropzone as ftd
-from flet import MainAxisAlignment
 
 from common.decorate import catch_error
 from common.util import datetime_2_date_str
@@ -176,60 +175,77 @@ def PluginContent():
         _delete_plugin(plugin, service, plugin_path)
         refresh()
 
-    # (标题, flex)：名称稍宽，描述撑满剩余空间
-    cols = (("名称", 2), ("版本", 1), ("描述", 5), ("安装时间", 2), ("操作", 1))
-    columns = [
-        ft.DataColumn(
-            label=ft.Container(ft.Text(title, color=TEXT), expand=True,
-                               alignment=ft.Alignment.CENTER),
-            heading_row_alignment=MainAxisAlignment.CENTER,
-            expand=flex,
+    # 弃用 DataTable：它的表头行与数据行走两套布局路径，text_align/expand/width
+    # 调参无法保证逐列像素对齐。改用 Row 手动布局——表头与数据行由同一个
+    # render_row() 生成，每列 Container(expand=flex) 锁死列宽比例，内容再
+    # Container(alignment=CENTER) 居中，从结构上保证严格对齐。
+    # flex：名称2 / 版本1 / 描述8（吃剩余、超长折叠 + tooltip）/ 安装时间3 / 操作1
+    COLS = (("名称", 2), ("版本", 1), ("描述", 8), ("安装时间", 3), ("操作", 1))
+
+    def cell(content: ft.Control, flex: int) -> ft.Container:
+        return ft.Container(content=content, expand=flex,
+                            alignment=ft.Alignment.CENTER)
+
+    def text_cell(text: str, *, color=TEXT, bold=False) -> ft.Text:
+        return ft.Text(str(text), color=color, max_lines=1,
+                       overflow=ft.TextOverflow.ELLIPSIS, tooltip=str(text),
+                       weight=ft.FontWeight.BOLD if bold else None)
+
+    def render_row(values: list[str], *, head=False, colors=None,
+                   action=None) -> ft.Row:
+        """表头/数据行共用：同一套列宽与居中，action 非空时替换末列。"""
+        cells = []
+        for i, (_, flex) in enumerate(COLS):
+            if i == len(COLS) - 1 and action is not None:
+                cells.append(cell(action, flex))
+            else:
+                cells.append(cell(
+                    text_cell(values[i], color=(colors[i] if colors else TEXT),
+                              bold=head),
+                    flex,
+                ))
+        return ft.Row(cells, spacing=12)
+
+    head_row = ft.Container(
+        content=render_row([t for t, _ in COLS], head=True),
+        bgcolor=BG_TABLE_HEAD, padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+        border_radius=ft.BorderRadius.only(top_left=RADIUS_MD, top_right=RADIUS_MD),
+    )
+    data_rows = [
+        ft.Container(
+            content=render_row(
+                [p.name, str(p.version), p.description,
+                 datetime_2_date_str(p.created_time, DATE_TIME_FMT), ""],
+                colors=[ACCENT, TEXT, TEXT, TEXT, TEXT],
+                action=ft.TextButton("删除", on_click=lambda e, plugin=p: drop(plugin)),
+            ),
+            bgcolor=BG_TABLE, padding=ft.Padding.symmetric(horizontal=12, vertical=8),
         )
-        for title, flex in cols
-    ]
-
-    def cell(text: str, flex: int, *, color=TEXT, align=ft.Alignment.CENTER_LEFT) -> ft.DataCell:
-        return ft.DataCell(ft.Container(
-            ft.Text(text, color=color, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
-                    tooltip=text),
-            expand=True, alignment=align,
-        ))
-
-    rows = [
-        ft.DataRow(cells=[
-            cell(p.name, 2, color=ACCENT),
-            cell(str(p.version), 1),
-            cell(p.description, 5),
-            cell(datetime_2_date_str(p.created_time, DATE_TIME_FMT), 2),
-            ft.DataCell(ft.Container(
-                ft.TextButton("删除", on_click=lambda e, plugin=p: drop(plugin)),
-                alignment=ft.Alignment.CENTER,
-            )),
-        ])
         for p in plugins
     ]
-    # 有数据才渲染表格；空态与工作详情附件区一致（图标 + 提示），避免露出光秃秃的表头
-    table = ft.DataTable(
-        columns=columns, rows=rows, expand=True,
-        border_radius=RADIUS_MD, bgcolor=BG_TABLE, heading_row_color=BG_TABLE_HEAD,
-        column_spacing=12,
-    ) if plugins else ft.Container(
+    # 有数据才渲染表格；空态与工作详情附件区一致（图标 + 提示）
+    table = ft.Column([head_row, *data_rows], spacing=0) if plugins else ft.Container(
         content=ft.Column([
             ft.Icon(ft.Icons.EXTENSION, size=28, color=MUTED),
             ft.Text("拖入 .py 插件安装", color=MUTED, size=FS_MD),
         ], alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
         alignment=ft.Alignment.CENTER, height=90,
+        bgcolor=BG_TABLE, border_radius=RADIUS_MD,
+    )
+    table_area = ft.Column(
+        [table], tight=True, horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
     )
 
     return ft.Column([
         *_section("插件管理", "拖入 .py 插件安装；插件会在对应类型的工作详情页加载为独立视图"),
         ftd.Dropzone(
-            content=ft.Container(content=table, expand=True),
+            content=ft.Container(content=table_area, expand=True),
             expand=True,
             on_dropped=lambda e: add_plugins(e.files),
         ),
-    ], expand=True, scroll=ft.ScrollMode.AUTO)
+    ], expand=True, scroll=ft.ScrollMode.AUTO,
+       horizontal_alignment=ft.CrossAxisAlignment.STRETCH)
 
 
 # ---------------------------------------------------------------- 数据管理

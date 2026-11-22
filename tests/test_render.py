@@ -434,6 +434,61 @@ class TestSettingUi(unittest.TestCase):
         walk_controls(body, lambda n: isinstance(n, ft.DataTable), tables)
         self.assertEqual(tables, [], "无插件时不应渲染空表头")
 
+    def test_plugin_table_fills_width_and_description_ellipsis(self):
+        """插件表横向撑满右侧、描述列 expand、超长单行折叠 + tooltip 看全文。"""
+        from pages import setting
+        from data.service import PluginService
+
+        desc = "一段非常非常长的插件描述内容" * 12
+        PluginService().create("测试插件", 1, desc, "test_plugin.py")
+        ctx._context_page.set(_FakePage("/setting"))
+        try:
+            with Renderer().with_context():
+                comp = setting.PluginContent()
+                body = Renderer(comp).render(comp.fn, *comp.args, **comp.kwargs)
+        finally:
+            for p in PluginService().list():
+                PluginService().delete(p.id)
+
+        # 横向 STRETCH 约束链：外层 Column → Dropzone → Container → 表格包裹 Column
+        self.assertEqual(body.horizontal_alignment, ft.CrossAxisAlignment.STRETCH)
+        dropzone = body.controls[-1]
+        table_area = dropzone.content.content
+        self.assertEqual(table_area.horizontal_alignment, ft.CrossAxisAlignment.STRETCH)
+        self.assertTrue(table_area.tight)
+
+        table = table_area.controls[0]
+        self.assertIsInstance(table, ft.Column)
+        # 弃用 DataTable：表头行 + 数据行都是 Container(content=Row)，由同一
+        # render_row() 生成，逐列结构完全一致，从根源保证对齐。
+        head_row, data_row = table.controls[0], table.controls[1]
+        head_cells, data_cells = head_row.content.controls, data_row.content.controls
+        self.assertIsInstance(head_row.content, ft.Row)
+        self.assertIsInstance(data_row.content, ft.Row)
+        self.assertEqual([c.content.value for c in head_cells],
+                         ["名称", "版本", "描述", "安装时间", "操作"])
+
+        # 每列 Container(expand=flex) + alignment=CENTER，描述列 flex 最大
+        self.assertEqual([c.expand for c in head_cells], [2, 1, 8, 3, 1])
+        self.assertEqual([c.expand for c in data_cells], [2, 1, 8, 3, 1])
+        self.assertTrue(all(c.alignment == ft.Alignment.CENTER
+                            for c in head_cells + data_cells),
+                        "每列内容必须居中，否则表头与数据错位")
+
+        # 描述列超长折叠 + tooltip
+        desc_text = data_cells[2].content
+        self.assertEqual(desc_text.max_lines, 1)
+        self.assertEqual(desc_text.overflow, ft.TextOverflow.ELLIPSIS)
+        self.assertEqual(desc_text.tooltip, desc)
+
+        # 表头与数据行逐列对齐：同样的 expand（列宽比例）+ 同样的居中 alignment
+        for hc, dc in zip(head_cells[:4], data_cells[:4]):
+            self.assertEqual(dc.expand, hc.expand)
+            self.assertEqual(dc.alignment, hc.alignment)
+        # 末列为操作：表头文本 vs 删除按钮，二者同列同 expand 同居中
+        self.assertEqual(data_cells[4].expand, head_cells[4].expand)
+        self.assertEqual(data_cells[4].alignment, head_cells[4].alignment)
+
     def test_restore_uses_file_picker(self):
         import inspect
         from pages import setting
