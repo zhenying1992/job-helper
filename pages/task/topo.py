@@ -7,15 +7,14 @@ from typing import Optional
 import flet as ft
 import flet.canvas as cv
 
-from constant import NODE_H, NODE_W
+from constant import NODE_H, NODE_W, Status
 from data.model import Job
 from data.service import TaskService
 from pages.task import CreateTaskDialog, UpdateTaskDialog, DropTaskDialog
 from theme import (
     BG_CANVAS as BG, BG_CARD_ALT as CARD, BORDER_TOPO as BORDER,
     PRIMARY as ACCENT, ACCENT_SOFT as GHOST, TEXT_BRIGHT as TEXT,
-    SELECTED as SEL, SUCCESS as HOVER, GREEN_DARK, PURPLE_DARK, PURPLE,
-    TEXT_SUBTLE, TRANSPARENT, FS_LG, FS_MD,
+    SELECTED as SEL, TEXT_SUBTLE, TRANSPARENT, FS_LG, FS_MD, FS_XS,
 )
 
 # ---------------- 尺寸与配色 ----------------
@@ -62,7 +61,11 @@ class Node:
     x: float
     y: float
     text: str
-    kind: str = "process"  # start / process / end
+    kind: str = "process"       # start / process / end（连线形态用）
+    status: str = ""            # 任务状态：决定节点配色
+    assignee: str = ""          # 负责人：节点副信息
+    hours: int = 0              # 预估工时：节点副信息
+    tags: str = ""              # 标签：节点副信息（逗号拼接，超长截断）
 
     def anchor(self, direction: str) -> tuple[float, float]:
         """某一侧的中点（Stack 坐标）"""
@@ -113,7 +116,11 @@ class EditorState:
                 x=task.position.x,
                 y=task.position.y,
                 text=task.name,
-                kind=task.status
+                kind=task.status,
+                status=Status.normalize(task.status),
+                assignee=(task.assignee or "").strip(),
+                hours=task.estimate_hours or 0,
+                tags=", ".join(task.tags),
             ))
             for downstream in task.position.downstreams:
                 edges.append((task.id, downstream))
@@ -124,13 +131,26 @@ class EditorState:
 
 # ==================== 配色 ====================
 
+def _tint(color: str, alpha: float = 0.18) -> str:
+    """把前景色按 alpha 混到卡片底色，得到不透明的节点填充。"""
+    f = color.lstrip("#")
+    b = CARD.lstrip("#")
+    fr, fg_, fb = int(f[0:2], 16), int(f[2:4], 16), int(f[4:6], 16)
+    br, bg_, bb = int(b[0:2], 16), int(b[2:4], 16), int(b[4:6], 16)
+    return "#{:02x}{:02x}{:02x}".format(
+        int(fr * alpha + br * (1 - alpha)),
+        int(fg_ * alpha + bg_ * (1 - alpha)),
+        int(fb * alpha + bb * (1 - alpha)),
+    )
+
+
 def node_colors(node: Node) -> tuple[str, str]:
-    """返回 (填充色, 默认边框色)"""
-    if node.kind == "start":
-        return GREEN_DARK, HOVER
-    if node.kind == "end":
-        return PURPLE_DARK, PURPLE
-    return CARD, TEXT_SUBTLE
+    """返回 (填充色, 默认边框色)。随任务状态色变化，未识别状态回退到中性色。"""
+    state = Status.normalize(node.status)
+    color = Status.color(state)
+    if not state or state not in Status.COLORS:
+        return CARD, TEXT_SUBTLE
+    return _tint(color), color
 
 
 # ==================== 几何（纯函数） ====================
@@ -452,13 +472,42 @@ def NodeView(state: EditorState, node: Node):
             set_cursor(c)  # 只重渲染这一个节点
 
     fill, default_border = node_colors(node)
+    state_color = default_border if default_border != TEXT_SUBTLE else GHOST
 
     if state.hover is not None and state.hover == node.id:
-        border = HOVER
+        border = state_color
     elif state.selected is not None and state.selected == node.id:
         border = ACCENT
     else:
         border = default_border
+
+    # 副信息：只展示有值的项，评估后取「负责人 · 工时」，标签作 tooltip 不占高度。
+    # 任务名可能较长，用 ELLIPSIS 截断保证不撑破节点。
+    meta_parts = []
+    if node.assignee:
+        meta_parts.append(node.assignee)
+    if node.hours:
+        meta_parts.append(f"{node.hours}h")
+    meta = " · ".join(meta_parts)
+    tooltip = node.tags or None
+
+    info = ft.Column(
+        controls=[
+            ft.Text(node.text, color=TEXT, size=FS_LG,
+                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                    text_align=ft.TextAlign.CENTER),
+            ft.Text(meta, color=state_color, size=FS_XS,
+                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                    text_align=ft.TextAlign.CENTER),
+        ] if meta else [
+            ft.Text(node.text, color=TEXT, size=FS_LG,
+                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                    text_align=ft.TextAlign.CENTER),
+        ],
+        spacing=2,
+        alignment=ft.MainAxisAlignment.CENTER,
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+    )
 
     return ft.Container(
         left=node.x,
@@ -481,7 +530,8 @@ def NodeView(state: EditorState, node: Node):
                 border=ft.Border.all(2, border),
                 border_radius=10,
                 alignment=ft.Alignment.CENTER,
-                content=ft.Text(node.text, color=TEXT, size=FS_LG),
+                tooltip=tooltip,
+                content=info,
             ),
         ),
     )

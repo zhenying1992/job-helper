@@ -60,27 +60,32 @@ LEGEND_NAMES = LEGEND_ORDER + [OVERDUE]
 # 打开后，历史上所有过期未完成的任务都会变红；按需开启。
 AUTO_OVERDUE = False
 
-# 拖动端点时，条本身是否实时跟着伸缩。
-# True  = 每次 pan_update 只改「数据侧的几何」并触发重渲染，条跟着鼠标伸缩。
-#         这就是拓扑页的做法（node.x += dl.x 改的是普通对象，不碰 _frozen）。
-#         代价：每帧重建整棵日历（91 个控件）并做一次 diff。
-# False = 日历一次都不重渲染，只在 page.overlay 里弹一个日期提示卡。
-#         代价：拖动过程中条不变长，松手才跳位。
-LIVE_PREVIEW = True
+# 拖动端点时按「目标日期范围」实时重切段（含跨行/跨周），渲染层每帧重建预览段。
+# 几何放在 use_state 里而非控件属性上，跨帧 key 稳定 → pan 手势不会断。
 
 
 # ---------------------------------------------------------------- 数据计算
 @dataclass
 class _Seg:
-    """一条任务在某一周内的一段连续横条。"""
+    """一条任务在某一周内的一段连续横条。
+
+    普通段由任务真实日期切分而来；preview=True 的段是拖动端点时按目标
+    日期范围临时生成的预览段，只用于渲染，不落库。
+    """
     task: Task
     row: int
     c0: int
     c1: int
     lane: int = 0
-    first: bool = True       # 整条任务的首段
-    last: bool = True        # 整条任务的末段
-    multi: bool = False      # 整条任务是否跨周切成了多段
+    first: bool = True       # 整条（或本次预览范围）的首段
+    last: bool = True        # 整条（或本次预览范围）的末段
+    multi: bool = False      # 是否跨了多段
+    preview: bool = False    # 拖动预览段（非真实数据）
+
+
+def _task_key(task) -> int:
+    """任务稳定标识：优先数据库 id，兜底对象地址。"""
+    return getattr(task, "id", id(task))
 
 
 def _as_date(v) -> Optional[date]:
@@ -172,22 +177,85 @@ def _build_segments(tasks: list[Task], cells: list[date]) -> list[_Seg]:
     return segs
 
 
-def _assign_lanes(segs: list[_Seg]) -> None:
-    """同一行内贪心找互不重叠的泳道。"""
-    occupied: dict[int, list[list[tuple[int, int]]]] = {}
+def _assign_lanes(segs: list[_Seg], focus_id=None) -> None:
+    """任务级全局泳道分配：一条任务跨周所有段共用同一条泳道。
 
-    for seg in sorted(segs, key=lambda s: (s.row, s.c0, -(s.c1 - s.c0))):
-        lanes = occupied.setdefault(seg.row, [])
+    旧算法按 row 逐行贪心，导致同一任务在 11.12 和 11.13 落到不同泳道，
+    hover 时无法把折叠的那一段和其余段拼成一条连续的横条。这里改为以
+    「任务」为粒度做一次图着色：两任务只要在任意一天有交集就占用不同泳道，
+    因此同一任务天然在所有周、所有天保持同一 lane。
+
+    focus_id 指定的任务最先分配，稳定拿到 lane 0（可见区），原来占 lane 0
+    的任务被顺延到后面的泳道，超出 MAX_LANES 的就被折叠进「更多」——这正是
+    「把关注的挪出来、把别的挪进去」的语义。
+    """
+    by_task: dict[int, list[_Seg]] = {}
+    for seg in segs:
+        by_task.setdefault(_task_key(seg.task), []).append(seg)
+    if not by_task:
+        return
+
+    # 每个任务占用的 (row, col) 格子集合
+    cells_of: dict[int, set[tuple[int, int]]] = {}
+    for tk, task_segs in by_task.items():
+        occupied = set()
+        for seg in task_segs:
+            for col in range(seg.c0, seg.c1 + 1):
+                occupied.add((seg.row, col))
+        cells_of[tk] = occupied
+
+    def order(tk: int):
+        first_cell = min(cells_of[tk])
+        # 关注任务最优先；其次按最早出现位置；再按跨度长的优先（长任务稳定靠前）
+        focus_rank = 0 if (focus_id is not None and tk == focus_id) else 1
+        return (focus_rank, first_cell, -len(cells_of[tk]), tk)
+
+    lane_cells: dict[int, set[tuple[int, int]]] = {}
+    for tk in sorted(by_task, key=order):
+        mine = cells_of[tk]
         lane = 0
-        while True:
-            if lane >= len(lanes):
-                lanes.append([])
-                break
-            if all(seg.c1 < a or seg.c0 > b for a, b in lanes[lane]):
-                break
+        while lane in lane_cells and bool(mine & lane_cells[lane]):
             lane += 1
-        lanes[lane].append((seg.c0, seg.c1))
-        seg.lane = lane
+        lane_cells.setdefault(lane, set()).update(mine)
+        for seg in by_task[tk]:
+            seg.lane = lane
+
+
+def _range_segs(task, start: date, end: date, cells: list[date], lane: int) -> list[_Seg]:
+    """按任意日期范围生成预览段（拖动端点时的实时几何）。
+
+    与 _build_segments 共用「按自然周切段」的规则，但只需要一个任务的日期范围，
+    不查库、不碰真实 task 的日期，因此每帧重建成本极低。
+    """
+    if start is None or end is None:
+        return []
+    if end < start:
+        start, end = end, start
+    win_start, win_end = cells[0], cells[-1]
+    if end < win_start or start > win_end:
+        return []
+    start = max(start, win_start)
+    end = min(end, win_end)
+
+    raw: list[list[int]] = []
+    day = start
+    while day <= end:
+        n = (day - win_start).days
+        row, col = divmod(n, 7)
+        if raw and raw[-1][0] == row:
+            raw[-1][2] = col
+        else:
+            raw.append([row, col, col])
+        day += timedelta(days=1)
+
+    out: list[_Seg] = []
+    for i, (row, c0, c1) in enumerate(raw):
+        out.append(_Seg(
+            task=task, row=row, c0=c0, c1=c1, lane=lane,
+            first=i == 0, last=i == len(raw) - 1,
+            multi=len(raw) > 1, preview=True,
+        ))
+    return out
 
 
 def _blend(fg: str, bg: str = BG_CELL, alpha: float = 0.16) -> str:
@@ -203,6 +271,49 @@ def _blend(fg: str, bg: str = BG_CELL, alpha: float = 0.16) -> str:
     )
 
 
+# 横条内可塞元信息的最小宽度：1 天格约 170px，足够放「@负责人 · 3h」
+META_MIN_W = 108
+TAG_MIN_W = 280
+
+
+def _bar_meta(task, bar_width: float) -> str:
+    """按横条宽度决定要附加的元信息；放不下的留给 tooltip。"""
+    if bar_width < META_MIN_W:
+        return ""
+    parts = []
+    assignee = (getattr(task, "assignee", "") or "").strip()
+    hours = getattr(task, "estimate_hours", 0) or 0
+    tags = getattr(task, "tags", None) or []
+    if assignee:
+        parts.append(f"@{assignee}")
+    if hours:
+        parts.append(f"{hours}h")
+    if tags and bar_width >= TAG_MIN_W:
+        parts.append(f"#{tags[0]}")
+    return " · ".join(parts)
+
+
+def _bar_tooltip(task, label: str) -> str:
+    """hover 时展示的完整信息：名称 + 负责人/工时/标签/描述。"""
+    lines = [label.strip("‹ › ").strip() or "（未命名任务）"]
+    assignee = (getattr(task, "assignee", "") or "").strip()
+    hours = getattr(task, "estimate_hours", 0) or 0
+    tags = getattr(task, "tags", None) or []
+    desc = (getattr(task, "description", "") or "").strip()
+    bits = []
+    if assignee:
+        bits.append(f"负责人 {assignee}")
+    if hours:
+        bits.append(f"工时 {hours}h")
+    if bits:
+        lines.append(" · ".join(bits))
+    if tags:
+        lines.append("标签 " + "、".join(tags))
+    if desc:
+        lines.append(desc)
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- 视图
 @ft.component
 @catch_error
@@ -214,17 +325,24 @@ def calendar_view():
     # 任务被编辑后自增，触发重渲染并重新查库
     rev, set_rev = ft.use_state(0)
 
-    # 拖拽过程态。用 use_ref 而不是 use_state：改 .current 不触发重渲染，
-    # 只用来累积位移，不参与渲染。
+    # 手势累积态放 use_ref（改 .current 不触发重渲染）。
     drag_ref = ft.use_ref(None)
 
-    # 拖动几何放在「数据侧」，不写在控件上 —— 这是拓扑页能实时拖的关键：
-    # node.x += dl.x 改的是普通 Python 对象，永远碰不到 _frozen。
-    # 条也一样：left/width 放这里，渲染时读出来画，控件本身一个属性都不改。
+    # 拖动预览几何放 use_state：每帧换一个新 dict → 触发声明式重渲染。
+    # 关键（踩坑）：重渲染时所有真实段的 key 保持不变，正在被拖的把手控件始终
+    # 留在树里；预览条是「额外追加」的独立控件（pv- 前缀），绝不替换真实段。
+    # 原先「摘掉真实段、用新 key 的预览段顶替」会把正在拖的 GestureDetector
+    # 卸载 → 客户端 pan 的 control id 失效 → 后续 pan_update 丢失（不实时+报错）。
     drag, set_drag = ft.use_state(None)
 
-    # 悬停高亮：当前鼠标所在任务的 id（同任务跨周多段一起高亮）
+    # 悬停高亮：当前鼠标所在任务的 id（同任务跨周多段一起高亮）。
+    # hover 只改这一项（不进 cache_key），所以只刷颜色、绝不重排泳道 → 不抖动。
     hover_key, set_hover = ft.use_state(None)
+
+    # 关注任务：只在「点击横条」或「点/悬浮更多清单项」时改。
+    # 绝不在横条 on_enter 里改——那会重排泳道→条移动到光标下→再触发 enter→
+    # 无限循环抖动。点击是一次性动作，弹窗会盖住光标，不会形成反馈环。
+    focus_key, set_focus = ft.use_state(None)
 
     # 拖动每帧都重渲染，query + 分组 + 排泳道没必要每帧重算，缓存住。
     calc_ref = ft.use_ref(None)
@@ -255,12 +373,25 @@ def calendar_view():
             pass
 
     # ---- 宽度自适应：窗口变宽时按比例加宽列，变窄时保底横向滚动 ----
-    win_w, set_win_w = ft.use_state(0)
+    # 初始就取当前窗口宽度，避免首帧用默认值 1280 导致宽窗口右侧留白。
+    def _current_width() -> int:
+        try:
+            page = ft.context.page
+            return int(page.window.width or 0)
+        except Exception:
+            return 0
+
+    win_w, set_win_w = ft.use_state(_current_width())
 
     def _bind_resize():
         try:
             page = ft.context.page
-            page.on_resize = lambda e: set_win_w(page.width)
+            # PageResizeEvent.width 才是新宽度；page.width 在 1.0.3 不存在，
+            # 之前读它抛异常被吞，win_w 一直为 0，网格按默认 1280 算→右侧留白。
+            page.on_resize = lambda e: set_win_w(int(e.width or 0))
+            w = _current_width()
+            if w and w != win_w:
+                set_win_w(w)
         except Exception:
             pass
 
@@ -269,8 +400,8 @@ def calendar_view():
     col_w = max(MIN_COL_W, ((win_w or DEFAULT_WIN_W) - OUTER_PAD) // 7)
     grid_w = col_w * 7
 
-    # 拖动期间 rev / 月份 / 筛选不变 → 计算只做一次
-    cache_key = (year, month, rev, hidden)
+    # 拖动期间 rev / 月份 / 筛选 / 关注任务不变 → 计算只做一次
+    cache_key = (year, month, rev, hidden, focus_key)
     calc = calc_ref.current
     if calc is not None and calc[0] == cache_key:
         tasks, cells, segs, month_count = calc[1:]
@@ -281,7 +412,7 @@ def calendar_view():
         # 被关掉的状态先剔掉，再分组排泳道
         visible = [t for t in tasks if _status_of(t) not in hidden]
         segs = _build_segments(visible, cells)
-        _assign_lanes(segs)
+        _assign_lanes(segs, focus_key)
 
         # 本月有交集的任务数（跟随筛选）
         month_first = date(year, month, 1)
@@ -302,7 +433,10 @@ def calendar_view():
         set_ym((today.year, today.month))
 
     def open_task(task: Task):
-        """点条 → 弹出编辑窗，保存后重查库刷新日历。"""
+        """点条 → 置顶该任务（放出来的横条）并弹出编辑窗，保存后重查库刷新。"""
+        # 点击即设为关注任务：被折叠进「更多」的任务点开清单项后也会被放出来
+        tk = getattr(task, "id", id(task))
+        set_focus(tk)
         try:
             from pages.task import UpdateTaskDialog
 
@@ -312,6 +446,17 @@ def calendar_view():
         except Exception:
             # 不想静默失败：导入路径或 dialog 签名不对时能立刻看到
             logger.exception("打开任务编辑失败")
+
+    def _focus_from_list(task: Task):
+        """在「更多」清单里 hover/点击：高亮 + 置顶，把折叠任务放出来。
+
+        清单浮层不在网格里，置顶重排不会把别的条移到光标下，无抖动反馈环。
+        """
+        tk = _task_key(task)
+        if hover_key != tk:
+            set_hover(tk)
+        if focus_key != tk:
+            set_focus(tk)
 
     def open_cell_list(tasks: list[Task], e):
         """点 +N 更多 → 在鼠标位置弹一张清单卡，列出被折叠的任务，逐条可点进编辑。"""
@@ -327,27 +472,38 @@ def calendar_view():
         for t in dedup:
             status = _status_of(t)
             c = _color_of(status)
+            name = (getattr(t, "name", "") or "").strip()
+            extra = _bar_meta(t, 1000)  # 清单卡里塞全量元信息
             rows.append(
                 ft.GestureDetector(
-                    on_tap=lambda ev, tk=t: (open_task(tk), close()),
+                    on_tap=lambda ev, task=t: (open_task(task), close()),
+                    on_hover=lambda ev, task=t: _focus_from_list(task),
                     mouse_cursor=ft.MouseCursor.CLICK,
-                    content=ft.Row(
+                    content=ft.Column(
                         controls=[
-                            ft.Container(width=8, height=8, bgcolor=c, border_radius=2),
-                            ft.Text(
-                                getattr(t, "name", "") or "",
-                                size=12,
-                                color=COLOR_TEXT,
-                                max_lines=1,
-                                overflow=ft.TextOverflow.ELLIPSIS,
+                            ft.Row(
+                                controls=[
+                                    ft.Container(width=8, height=8, bgcolor=c, border_radius=2),
+                                    ft.Text(
+                                        name,
+                                        size=12,
+                                        color=COLOR_TEXT,
+                                        max_lines=1,
+                                        overflow=ft.TextOverflow.ELLIPSIS,
+                                        tooltip=_bar_tooltip(t, name),
+                                    ),
+                                ],
+                                spacing=8,
                             ),
+                            ft.Text(extra, size=FS_XS, color=SLATE) if extra else ft.Container(height=0),
                         ],
-                        spacing=8,
+                        spacing=2,
+                        tight=True,
                     ),
                 )
             )
 
-        card_w = 220
+        card_w = 260
         gx = e.global_position.x
         gy = e.global_position.y
         left = min(max(0.0, gx), max(0.0, (win_w or DEFAULT_WIN_W) - card_w - 16))
@@ -443,21 +599,19 @@ def calendar_view():
         b_top: float,
         color: str,
     ):
-        """
-        条两端的拖拽热区：RESIZE 光标 + pan 手势。
+        """两端拖拽热区：pan 期间用声明式状态画实时预览条（跨行多段）。
 
-        LIVE_PREVIEW=True 走拓扑页那套：只改数据侧几何 → 重渲染 → 条跟着伸缩。
-        LIVE_PREVIEW=False 时日历完全不重渲染，只在 page.overlay 弹日期提示卡。
+        踩坑要点：本把手控件在整个手势期间必须始终留在渲染树里、key 不变。
+        pan 回调只 set_drag（声明式重渲染），渲染层用预览条「额外叠加」而非
+        「顶替」真实段——真实段与把手的 key 恒定，Flet 按 key 复用同一控件，
+        control id 不变 → 客户端 pan 手势不中断。切勿在 pan 里 page.update()。
         """
 
         def _tip_text(days: int) -> str:
-            base = _as_date(
-                seg.task.start_time if side == "start" else seg.task.end_time
-            )
+            base = _as_date(seg.task.start_time if side == "start" else seg.task.end_time)
             if base is None:
                 return ""
             target = base + timedelta(days=days)
-            # 与落库口径保持一致：开始日不越过结束日，结束日不早于开始日
             s = _as_date(seg.task.start_time)
             e = _as_date(seg.task.end_time)
             if s and e:
@@ -466,18 +620,17 @@ def calendar_view():
             return f"{prefix} → {target.month} 月 {target.day} 日"
 
         def on_start(e):
-            hx0 = b_left if side == "start" else b_left + b_width - BAR_HANDLE_W
             s0 = _as_date(seg.task.start_time)
             e0 = _as_date(seg.task.end_time)
             span = (e0 - s0).days if s0 and e0 else 0
             drag_ref.current = {
                 "task": seg.task,
-                "key": bar_key,
                 "side": side,
-                "x0": b_left,
-                "w0": b_width,
-                "hx0": hx0,
+                "s0": s0,
+                "e0": e0,
                 "span": span,
+                "hx0": b_left if side == "start" else b_left + b_width - BAR_HANDLE_W,
+                "lane": seg.lane,
                 "lane_offset": b_top - seg.row * ROW_H,
                 "orig_row": seg.row,
                 "orig_col": seg.c0 if side == "start" else seg.c1,
@@ -485,7 +638,7 @@ def calendar_view():
                 "dx": 0.0,
                 "dy": 0.0,
                 "days": 0,
-                "tip": None,
+                "preview_on": False,
             }
 
         def on_update(e):
@@ -493,83 +646,55 @@ def calendar_view():
             if not st:
                 return
             g = e.global_position
-            # local_delta 是「自起点」的累计值，不能再 +=；直接用全局位置差值
             st["dx"] = g.x - st["g0"].x
             st["dy"] = g.y - st["g0"].y
 
-            # 把手落在哪一格 → 目标行列。floor 取整：进格即吸附；垂直一起算，支持跨行
             new_col = max(0, min(6, int((st["hx0"] + st["dx"]) // col_w)))
             new_row = st["orig_row"] + int((st["lane_offset"] + st["dy"]) // ROW_H)
             new_row = max(0, min(5, new_row))
             days = (new_row * 7 + new_col) - (st["orig_row"] * 7 + st["orig_col"])
-
-            # 钳制：开始把手不能越过结束日，结束把手不能越过开始日
             if side == "start":
                 days = min(days, st["span"])
             else:
                 days = max(days, -st["span"])
             st["days"] = days
 
-            # 跨周多段任务：单段预览表达不了整体，重渲染 diff 还容易让相邻段错位，
-            # 拖动过程保持原条不动，只靠浮层提示目标日期，松手后再重新切段。
-            if LIVE_PREVIEW and not seg.multi:
-                right = st["x0"] + st["w0"]
-                preview_top = new_row * ROW_H + st["lane_offset"]
-                min_w = col_w / 2
-                if side == "start":
-                    nl = max(0.0, min(st["x0"] + st["dx"], right - min_w))
-                    set_drag({"k": st["key"], "side": "start", "left": nl, "width": right - nl, "top": preview_top})
-                else:
-                    nw = max(min_w, st["w0"] + st["dx"])
-                    set_drag({"k": st["key"], "side": "end", "left": st["x0"], "width": nw, "top": preview_top})
+            if days == 0 and abs(st["dx"]) < 6:
                 return
+            st["preview_on"] = True
 
-            # 非实时模式：日历不动，只在浮层里给日期提示
-            tip = st["tip"]
-            if tip is None:
-                # 位移太小当误触，先不弹，避免单击闪一下
-                if abs(st["dx"]) < 6:
-                    return
-                tip = ft.Container(
-                    left=0,
-                    top=0,
-                    bgcolor=BG_CANVAS,
-                    border=ft.Border(
-                        top=ft.BorderSide(1, ACCENT),
-                        right=ft.BorderSide(1, ACCENT),
-                        bottom=ft.BorderSide(1, ACCENT),
-                        left=ft.BorderSide(1, ACCENT),
-                    ),
-                    border_radius=6,
-                    padding=ft.Padding(left=10, top=5, right=10, bottom=5),
-                    content=ft.Text("", size=FS_SM, color=ACCENT, weight=ft.FontWeight.W_500),
-                )
-                st["tip"] = tip
-                _overlay_add(tip)
+            s0, e0 = st["s0"], st["e0"]
+            if s0 is None or e0 is None:
+                return
+            if side == "start":
+                ns, ne = min(s0 + timedelta(days=days), e0), e0
+            else:
+                ns, ne = s0, max(e0 + timedelta(days=days), s0)
 
-            try:
-                tip.content.value = _tip_text(days)
-                tip.left = e.global_position.x + 14
-                tip.top = e.global_position.y - 34
-                tip.update()
-            except Exception:
-                pass
+            # 只更新声明式状态；预览段作为「额外控件」进渲染树，真实段/把手不动
+            set_drag({
+                "tk": _task_key(st["task"]),
+                "task": st["task"],
+                "side": side,
+                "segs": _range_segs(st["task"], ns, ne, cells, st["lane"]),
+                "lane": st["lane"],
+                "days": days,
+                "tip_text": _tip_text(days),
+                "gx": g.x,
+                "gy": g.y,
+            })
 
         def on_end(e):
             st = drag_ref.current
             drag_ref.current = None
             days = st["days"] if st else 0
-            if st and st["tip"] is not None:
-                _overlay_remove(st["tip"])
-            set_drag(None)          # 清掉预览，渲染层回到真实几何
+            set_drag(None)          # 清掉预览，渲染层只剩真实几何
             commit_resize(seg.task, side, days)
             set_rev(lambda v: v + 1)
 
-        h_left = b_left if side == "start" else b_left + b_width - BAR_HANDLE_W
-
         return ft.GestureDetector(
             key=f"{bar_key}-{'l' if side == 'start' else 'r'}",
-            left=h_left,
+            left=(b_left if side == "start" else b_left + b_width - BAR_HANDLE_W),
             top=b_top,
             width=BAR_HANDLE_W,
             height=BAR_H,
@@ -584,15 +709,17 @@ def calendar_view():
             ),
         )
 
+    # 渲染真实段。拖动预览走 page.overlay，完全不碰这里的控件树 —— 被拖的把手
+    # 始终留在树里、key 稳定，客户端 pan 手势不会因重渲染而中断。
     for seg in segs:
+        tk = _task_key(seg.task)
+        status = _status_of(seg.task)
+        color = _color_of(status)
+
         if seg.lane >= MAX_LANES:
             for col in range(seg.c0, seg.c1 + 1):
                 overflow.setdefault((seg.row, col), []).append(seg.task)
             continue
-
-        status = _status_of(seg.task)
-        color = _color_of(status)
-        tk = getattr(seg.task, "id", id(seg.task))
 
         label = (getattr(seg.task, "name", "") or "").strip()
         if not seg.first:
@@ -605,18 +732,12 @@ def calendar_view():
         b_width = (seg.c1 - seg.c0 + 1) * col_w - 6
         b_top = seg.row * ROW_H + BAR_TOP + seg.lane * (BAR_H + BAR_GAP)
 
-        # 拖动预览：从数据侧取几何，控件自己一个属性都不改。
-        # end 侧只改宽，左端位置保持真实值，避免把手侧串扰到左边。
-        if drag and drag.get("k") == bar_key:
-            b_width = drag["width"]
-            b_top = drag.get("top", b_top)
-            if drag.get("side") == "start":
-                b_left = drag["left"]
-
         is_hover = hover_key == tk
+        meta = _bar_meta(seg.task, b_width)
+        alpha = 0.30 if is_hover else 0.16
 
         body = ft.Container(
-            bgcolor=_blend(color, BG_CELL, 0.30 if is_hover else 0.16),
+            bgcolor=_blend(color, BG_CELL, alpha),
             border_radius=ft.BorderRadius(
                 top_left=4 if seg.first else 0,
                 bottom_left=4 if seg.first else 0,
@@ -624,31 +745,46 @@ def calendar_view():
                 bottom_right=4 if seg.last else 0,
             ),
             border=ft.Border(left=ft.BorderSide(3, color)),
-            padding=ft.Padding(left=14, top=0, right=14, bottom=0),
+            padding=ft.Padding(left=10, top=0, right=10, bottom=0),
             alignment=ft.Alignment.CENTER_LEFT,
             on_click=lambda e, t=seg.task: open_task(t),
-            content=ft.Text(
-                label,
-                size=11,
-                color=color,
-                max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS,
+            content=ft.Row(
+                controls=[
+                    ft.Text(
+                        label,
+                        size=11,
+                        color=color,
+                        expand=True,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                        tooltip=_bar_tooltip(seg.task, label),
+                    ),
+                    ft.Text(meta, size=FS_XS, color=SLATE, max_lines=1)
+                    if meta else ft.Container(width=0),
+                ],
+                spacing=6,
             ),
         )
 
-        body_det = ft.GestureDetector(
-            key=bar_key,
-            left=b_left,
-            top=b_top,
-            width=b_width,
-            height=BAR_H,
-            on_enter=lambda e, t=tk: set_hover(t),
-            on_exit=lambda e: set_hover(None),
-            mouse_cursor=ft.MouseCursor.CLICK,
-            content=body,
-        )
+        def _hover_task(t):
+            # 只高亮、不重排：hover 不进 cache_key，绝不改泳道布局。
+            # 置顶/放出来只在点击(open_task)或点「更多」清单时发生，避免抖动循环。
+            if hover_key != t:
+                set_hover(t)
 
-        bar_controls.append(body_det)
+        bar_controls.append(
+            ft.GestureDetector(
+                key=bar_key,
+                left=b_left,
+                top=b_top,
+                width=b_width,
+                height=BAR_H,
+                on_enter=lambda e, t=tk: _hover_task(t),
+                on_exit=lambda e: set_hover(None),
+                mouse_cursor=ft.MouseCursor.CLICK,
+                content=body,
+            )
+        )
         if seg.first:
             bar_controls.append(
                 make_handle(seg, "start", bar_key, b_left, b_width, b_top, color)
@@ -657,6 +793,67 @@ def calendar_view():
             bar_controls.append(
                 make_handle(seg, "end", bar_key, b_left, b_width, b_top, color)
             )
+
+    # ---------- 拖动预览条（额外叠加，不顶替真实段） ----------
+    # 真实段与把手已在上面渲染且 key 固定；这里只追加 pv- 前缀的展示条。
+    # 每帧重渲染时真实控件按 key 复用、control id 不变 → pan 手势不中断。
+    if drag and drag.get("segs"):
+        pv_color = _color_of(_status_of(drag["task"]))
+        for i, ps in enumerate(drag["segs"]):
+            pv_label = (getattr(drag["task"], "name", "") or "").strip()
+            if not ps.first:
+                pv_label = "‹ " + pv_label
+            if not ps.last:
+                pv_label = pv_label + " ›"
+            bar_controls.append(
+                ft.Container(
+                    key=f"pv-{i}-{ps.row}",
+                    left=ps.c0 * col_w + 3,
+                    top=ps.row * ROW_H + BAR_TOP + ps.lane * (BAR_H + BAR_GAP),
+                    width=(ps.c1 - ps.c0 + 1) * col_w - 6,
+                    height=BAR_H,
+                    bgcolor=_blend(pv_color, BG_CELL, 0.46),
+                    border=ft.Border(
+                        left=ft.BorderSide(3, ACCENT),
+                        top=ft.BorderSide(1, pv_color),
+                        right=ft.BorderSide(1, pv_color),
+                        bottom=ft.BorderSide(1, pv_color),
+                    ),
+                    border_radius=ft.BorderRadius(
+                        top_left=4 if ps.first else 0, bottom_left=4 if ps.first else 0,
+                        top_right=4 if ps.last else 0, bottom_right=4 if ps.last else 0,
+                    ),
+                    padding=ft.Padding(left=10, top=0, right=8, bottom=0),
+                    alignment=ft.Alignment.CENTER_LEFT,
+                    content=ft.Text(
+                        pv_label, size=11, color=pv_color, max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                )
+            )
+        # 日期提示浮层：用网格局部坐标（跟随被拖端点所在的格），避免全局↔局部换算误差
+        tip_seg = drag["segs"][0] if drag["side"] == "start" else drag["segs"][-1]
+        tip_col = tip_seg.c0 if drag["side"] == "start" else tip_seg.c1
+        tip_x = min(max(0.0, tip_col * col_w + 6), grid_w - 120)
+        tip_y = max(0.0, tip_seg.row * ROW_H + BAR_TOP - 22)
+        bar_controls.append(
+            ft.Container(
+                key="pv-tip",
+                left=tip_x,
+                top=tip_y,
+                bgcolor=BG_CANVAS,
+                border=ft.Border(
+                    top=ft.BorderSide(1, ACCENT), right=ft.BorderSide(1, ACCENT),
+                    bottom=ft.BorderSide(1, ACCENT), left=ft.BorderSide(1, ACCENT),
+                ),
+                border_radius=6,
+                padding=ft.Padding(left=10, top=5, right=10, bottom=5),
+                content=ft.Text(
+                    drag["tip_text"], size=FS_SM, color=ACCENT,
+                    weight=ft.FontWeight.W_500,
+                ),
+            )
+        )
 
     for (row, col), tasks in overflow.items():
         bar_controls.append(
@@ -790,6 +987,7 @@ def calendar_view():
     calendar_area = ft.Row(
         controls=[ft.Column([weekhead, grid], spacing=0)],
         scroll=ft.ScrollMode.AUTO,
+        expand=True,
     )
 
     # ---------- 图例（可点击，切换该状态是否显示） ----------

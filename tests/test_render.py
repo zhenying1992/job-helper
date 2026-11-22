@@ -477,6 +477,250 @@ class TestProgressChartRender(unittest.TestCase):
             self.assertIn(text, labels)
 
 
+class TestTopoAndCalendarUi(unittest.TestCase):
+    """拓扑节点状态色/副信息 + 日历关注任务优先泳道。"""
+
+    def test_topo_node_color_follows_status(self):
+        """回归：node.kind 曾是状态串，node_colors 判断 start/end 永远落空，
+        所有节点同一灰蓝色。现在按 status 取 Status.color。"""
+        from pages.task import topo
+        from constant import Status
+        from theme import TEXT_SUBTLE
+
+        job = JobService.create(f"拓扑色-{datetime.now().timestamp()}", "通用工作")
+        states = ["未开始", "执行中", "阻塞中", "已完成"]
+        tks = []
+        for i, st in enumerate(states):
+            tk = TaskService.create(job.id, f"N{i}", status=st, assignee=f"人{i}",
+                                    estimate_hours=i + 1)
+            tks.append(tk)
+        editor = topo.TaskTopo(job)
+        by_text = {n.text: n for n in editor.state.nodes}
+        seen = set()
+        for i, st in enumerate(states):
+            node = by_text[f"N{i}"]
+            _, border = topo.node_colors(node)
+            self.assertEqual(border, Status.color(st))
+            self.assertNotEqual(border, TEXT_SUBTLE)
+            seen.add(border)
+        self.assertEqual(len(seen), len(states))  # 四种状态四种颜色
+
+        # 副信息随节点数据带入
+        n0 = by_text["N0"]
+        self.assertEqual(n0.assignee, "人0")
+        self.assertEqual(n0.hours, 1)
+
+    def test_calendar_focus_task_takes_front_lane(self):
+        """hover/点击的任务即便原本被折叠，也要优先占可见泳道。"""
+        import pages.calendar as cal
+        from datetime import datetime as dt
+
+        job = JobService.create(f"日历泳道-{datetime.now().timestamp()}", "通用工作")
+        tks = [TaskService.create(job.id, f"T{i}", status="执行中",
+                                  start_time=dt(2026, 11, 2), end_time=dt(2026, 11, 20))
+               for i in range(5)]
+        cells = cal._month_window(2026, 11)
+        segs = cal._build_segments(tks, cells)
+        cal._assign_lanes(segs, focus_id=tks[4].id)
+        lane = {getattr(s.task, "id", id(s.task)): s.lane for s in segs}
+        self.assertEqual(lane[tks[4].id], 0)
+        self.assertTrue(all(lane[tks[i].id] > 0 for i in range(4)))
+
+        # 换关注对象后重新分配，旧的被挤走
+        cal._assign_lanes(segs, focus_id=tks[0].id)
+        lane = {getattr(s.task, "id", id(s.task)): s.lane for s in segs}
+        self.assertEqual(lane[tks[0].id], 0)
+        self.assertGreater(lane[tks[4].id], 0)
+
+    def test_calendar_task_lane_stable_across_weeks(self):
+        """同一任务跨周所有段必须共享泳道，否则 hover 时无法拼成一条横条。"""
+        import pages.calendar as cal
+        from datetime import datetime as dt
+
+        job = JobService.create(f"日历跨周-{datetime.now().timestamp()}", "通用工作")
+        a = TaskService.create(job.id, "A", start_time=dt(2026, 11, 12),
+                               end_time=dt(2026, 11, 17))
+        b = TaskService.create(job.id, "B", start_time=dt(2026, 11, 13),
+                               end_time=dt(2026, 11, 13))
+        cells = cal._month_window(2026, 11)
+        segs = cal._build_segments([a, b], cells)
+        cal._assign_lanes(segs)
+        a_segs = [s for s in segs if s.task.id == a.id]
+        self.assertGreater(len(a_segs), 1)
+        self.assertEqual(len({s.lane for s in a_segs}), 1,
+                         "跨周任务所有段必须在同一泳道")
+
+    def test_calendar_focus_promotes_folded_task_and_demotes_others(self):
+        """A(11.12-11.14) 被 X0/X1/X2 挤进更多时，focus A 应把 A 放到
+        可见泳道 0，同时把原来的任务顺延——即「把 A 挪出来，把别的挪进去」。"""
+        import pages.calendar as cal
+        from datetime import datetime as dt
+
+        job = JobService.create(f"日历折叠-{datetime.now().timestamp()}", "通用工作")
+        xs = [TaskService.create(job.id, f"X{i}", start_time=dt(2026, 11, 10),
+                                 end_time=dt(2026, 11, 15)) for i in range(3)]
+        a = TaskService.create(job.id, "A", start_time=dt(2026, 11, 12),
+                               end_time=dt(2026, 11, 14))
+        bs = [TaskService.create(job.id, f"B{i}", start_time=dt(2026, 11, 13),
+                                 end_time=dt(2026, 11, 13)) for i in range(3)]
+        tasks = xs + [a] + bs
+        cells = cal._month_window(2026, 11)
+
+        segs = cal._build_segments(tasks, cells)
+        cal._assign_lanes(segs)
+        a_lane = [s.lane for s in segs if s.task.id == a.id][0]
+        self.assertGreaterEqual(a_lane, cal.MAX_LANES, "A 原本应被折叠")
+
+        focused = cal._build_segments(tasks, cells)
+        cal._assign_lanes(focused, focus_id=a.id)
+        a_lane2 = [s.lane for s in focused if s.task.id == a.id][0]
+        self.assertEqual(a_lane2, 0, "focus 后 A 必须占可见泳道 0")
+        self.assertTrue(all(
+            [s.lane for s in focused if s.task.id == t.id][0] > 0 for t in xs
+        ), "原占前排的任务应被顺延")
+
+    def test_calendar_range_segs_for_cross_row_drag(self):
+        """拖动端点跨行时按日期范围重切段：首尾标记、lane、preview 标记正确。"""
+        import pages.calendar as cal
+        from datetime import date
+
+        cells = cal._month_window(2026, 11)
+        task = type("T", (), {"id": 999, "name": "跨行"})()
+        segs = cal._range_segs(task, date(2026, 11, 13), date(2026, 11, 17),
+                               cells, lane=1)
+        self.assertEqual([(s.row, s.c0, s.c1) for s in segs],
+                         [(2, 4, 6), (3, 0, 1)])
+        self.assertTrue(all(s.preview and s.lane == 1 and s.multi for s in segs))
+        self.assertTrue(segs[0].first and not segs[0].last)
+        self.assertTrue(not segs[1].first and segs[1].last)
+
+    def test_calendar_cross_row_drag_uses_range_preview(self):
+        """回归：旧实现跨行时只弹提示卡、条不动；新实现必须按日期范围重切段。"""
+        import inspect
+        import pages.calendar as cal
+
+        src = inspect.getsource(cal.calendar_view)
+        self.assertIn("_range_segs(", src, "拖动时必须按目标日期范围重建预览段")
+        self.assertIn('"segs":', src, "预览段要进 use_state 驱动重渲染")
+        self.assertNotIn("crossed_row", src, "旧的跨行特判像素预览已移除")
+        self.assertNotIn('drag.get("k")', src, "旧的像素几何预览已移除")
+
+    def test_calendar_drag_keeps_handle_key_stable(self):
+        """回归：pan 期间若把手控件被摘出/换 key，客户端手势中断 → 报错且不实时。
+
+        现在真实段与把手始终留在渲染树、key 固定；预览段是额外 pv- 控件，
+        且跨行时自动增长为多段。用真实 Renderer + hook 状态驱动验证。
+        """
+        import pages.calendar as cal
+
+        ctx._context_page.set(_FakePage("/calendar"))
+        job = JobService.create(f"日历拖拽-{datetime.now().timestamp()}", "通用工作")
+        TaskService.create(job.id, "DragTask", start_time=datetime(2026, 11, 12),
+                           end_time=datetime(2026, 11, 14))
+
+        class Ev:
+            def __init__(self, gx, gy):
+                self.global_position = ft.Offset(gx, gy)
+                self.local_position = ft.Offset(6, 9)
+                self.local_delta = ft.Offset(6, 9)
+
+        def walk(node, pred, out):
+            if isinstance(node, Component):
+                return
+            if pred(node):
+                out.append(node)
+            for attr in ("controls", "content"):
+                v = getattr(node, attr, None)
+                if v is None:
+                    continue
+                for x in (v if isinstance(v, (list, tuple)) else [v]):
+                    walk(x, pred, out)
+
+        with Renderer().with_context():
+            comp = cal.calendar_view()
+
+        def render():
+            comp._state.hook_cursor = 0
+            return Renderer(comp).render(comp.fn, *comp.args, **comp.kwargs)
+
+        def handles(b):
+            out = []
+            walk(b, lambda n: isinstance(n, ft.GestureDetector)
+                 and isinstance(n.key, str) and n.key.startswith("bar-")
+                 and n.key.endswith(("-l", "-r")), out)
+            return out
+
+        body = render()
+        hs = handles(body)
+        self.assertTrue(hs)
+        h = [x for x in hs if x.key.endswith("-r")][0]
+        h.on_pan_start(Ev(h.left + 6, h.top + 9))
+
+        seen_pv = []
+        # 向右下拖 4 帧，跨过至少一行
+        for i in range(1, 5):
+            h.on_pan_update(Ev(h.left + 6 + i * 180, h.top + 9 + i * 52))
+            b2 = render()
+            self.assertEqual(
+                sorted(x.key for x in handles(b2)), sorted(x.key for x in hs),
+                "把手 key 在拖动全程必须稳定，否则手势会被中断",
+            )
+            pv = []
+            walk(b2, lambda n: isinstance(n, ft.Container)
+                 and isinstance(n.key, str) and n.key.startswith("pv-")
+                 and n.key != "pv-tip", pv)
+            seen_pv.append(len(pv))
+        # 预览条数量随跨行增长（多段），松手后归零
+        self.assertGreater(max(seen_pv), 1, "跨行拖动应出现多段预览条")
+        h.on_pan_end(Ev(h.left + 900, h.top + 260))
+        b3 = render()
+        pv = []
+        walk(b3, lambda n: isinstance(n, ft.Container)
+             and isinstance(n.key, str) and n.key.startswith("pv-"), pv)
+        self.assertEqual(pv, [], "松手后预览层必须清空")
+
+    def test_calendar_hover_does_not_change_lanes(self):
+        """回归：hover 若触发 focus→重排泳道，条移到光标下又触发 enter→无限抖动。
+
+        on_enter 只允许 set_hover（高亮），不得 set_focus。
+        """
+        import inspect
+        import pages.calendar as cal
+
+        src = inspect.getsource(cal.calendar_view)
+        on_enter = [ln for ln in src.splitlines() if "on_enter=" in ln]
+        self.assertTrue(on_enter)
+        self.assertTrue(all("set_focus" not in ln for ln in on_enter),
+                        "横条 on_enter 不得修改 focus（会导致重排抖动）")
+
+    def test_calendar_bar_meta_and_tooltip(self):
+        """横条按宽度塞负责人/工时/标签，tooltip 带描述。"""
+        import pages.calendar as cal
+
+        job = JobService.create(f"日历元信息-{datetime.now().timestamp()}", "通用工作")
+        task = TaskService.create(
+            job.id, "MetaTask", assignee="张三", estimate_hours=6,
+            tags=["前端", "紧急"], description="完成接口联调",
+        )
+        self.assertIn("@张三", cal._bar_meta(task, 200))
+        self.assertIn("6h", cal._bar_meta(task, 200))
+        self.assertNotIn("#前端", cal._bar_meta(task, 200), "窄条不应塞标签")
+        self.assertIn("#前端", cal._bar_meta(task, 400))
+        self.assertEqual(cal._bar_meta(task, 40), "", "过窄的条不塞元信息")
+        tip = cal._bar_tooltip(task, "MetaTask")
+        for bit in ("张三", "6h", "前端", "完成接口联调"):
+            self.assertIn(bit, tip)
+
+    def test_calendar_width_uses_resize_event(self):
+        """回归：resize 回调读 page.width（1.0.3 无此属性）被吞，
+        win_w 恒为 0 → 用默认 1280 → 宽窗口日历右侧留白。"""
+        import inspect
+        import pages.calendar as cal
+        src = inspect.getsource(cal.calendar_view)
+        self.assertIn("e.width", src)
+        self.assertNotIn("set_win_w(page.width)", src)
+
+
 class TestRenderSmoke(unittest.TestCase):
     def test_main_routes_render(self):
         for route in ("/overview", "/jobs", "/calendar", "/setting"):
