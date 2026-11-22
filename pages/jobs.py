@@ -16,7 +16,16 @@ from theme import (
     # 与任务弹窗共用的暗色科技感表单样式
     form_field, form_option, required_label as _required_label,
     primary_button, FORM_COL_W, FORM_GAP, FORM_FULL_W,
+    dark_dropdown, dark_option,
 )
+
+
+def all_job_types() -> list[str]:
+    """全部工作类型：内置通用工作 + 插件注入的类型（如稽查案件）。
+
+    筛选栏与新建弹窗共用，避免两处来源不一致导致筛选下拉漏掉插件类型。
+    """
+    return [JobType.COMMON] + [p.name for p in PluginService.list()]
 
 
 @ft.component
@@ -74,6 +83,15 @@ def JobsView(current: int, set_current: Callable, page_size: int,
     # 选择栏
     def build_action_bar():
         """顶部筛选栏：搜索、类型/状态下拉与新增入口。"""
+
+        def on_type(e):
+            set_type(e.control.value)
+            set_current(1)  # 换筛选条件回到第一页，避免停在新条件下不存在的页码
+
+        def on_status(e):
+            set_status(e.control.value)
+            set_current(1)
+
         return ft.Container(
             padding=ft.Padding(left=24, right=24, top=16, bottom=16),
             content=ft.Row(
@@ -88,22 +106,22 @@ def JobsView(current: int, set_current: Callable, page_size: int,
                         text_size=FS_BASE,
                         on_change=lambda e: set_keyword(e.control.value),
                     ),
-                    ft.Dropdown(
+                    dark_dropdown(
                         label="工作类型",
                         width=240,
-                        options=[ft.DropdownOption(key='', text='全部')] +
-                                [ft.DropdownOption(key=i, text=i) for i in JobType.list()],
-                        value="",
-                        on_select=lambda e: set_type(e.control.value),
+                        options=[dark_option('', '全部')] +
+                                [dark_option(i) for i in all_job_types()],
+                        value=type,
+                        on_select=on_type,
                     ),
-                    ft.Dropdown(
+                    dark_dropdown(
                         label="工作状态",
                         width=140,
-                        options=[ft.DropdownOption(key="", text="全部")] + [
-                            ft.DropdownOption(key=i, text=i) for i in Status.list()
+                        options=[dark_option('', '全部')] + [
+                            dark_option(i) for i in Status.list()
                         ],
-                        value="",
-                        on_select=lambda e: set_status(e.control.value),
+                        value=status,
+                        on_select=on_status,
                     ),
                     ft.Container(expand=True),
                     ft.Button(
@@ -119,8 +137,7 @@ def JobsView(current: int, set_current: Callable, page_size: int,
 
     # 表格
     def open_new_job_dialog(e: ft.Event[ft.Button]):
-        plugins = PluginService.list()
-        job_types = [JobType.COMMON] + [plugin.name for plugin in plugins]
+        job_types = all_job_types()
 
         # 与任务弹窗共用同一套暗色科技感表单控件
         job_name = form_field(

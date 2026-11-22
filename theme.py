@@ -112,6 +112,70 @@ def form_option(value: str):
     )
 
 
+def dark_option(value: str, text: str | None = None):
+    """暗色下拉选项：深蓝底 + 冷白字，hover/选中青蓝描边高亮。
+
+    value 是筛选值（如空串代表"全部"），text 是显示文字；两者分离，
+    避免空 value 的选项显示成空白。所有状态显式指定暗色，避免系统浅灰高亮。
+    """
+    import flet as ft
+    label = value if text is None else text
+    return ft.DropdownOption(
+        key=value, text=label,
+        content=ft.Text(label, color=TEXT_BRIGHT),
+        style=ft.ButtonStyle(
+            bgcolor={
+                ft.ControlState.DEFAULT: BG_INPUT,
+                ft.ControlState.HOVERED: BG_TABLE_HEAD,
+                ft.ControlState.FOCUSED: BG_TABLE_HEAD,
+                ft.ControlState.SELECTED: BG_TABLE_HEAD,
+            },
+            color={
+                ft.ControlState.DEFAULT: TEXT_BRIGHT,
+                ft.ControlState.HOVERED: TEXT_BRIGHT,
+                ft.ControlState.FOCUSED: TEXT_BRIGHT,
+                ft.ControlState.SELECTED: TEXT_BRIGHT,
+            },
+            overlay_color=TRANSPARENT,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+        ),
+    )
+
+
+def dark_dropdown(options: list, *, label=None, value=None, width=None,
+                  on_select=None, **kwargs):
+    """暗色科技感下拉：收起态青描边深底亮字 + 弹出菜单深底 + 选项冷白字。
+    
+    用于筛选栏等非表单场景；表单里仍用 form_field(form_option) 组合。
+    """
+    import flet as ft
+    base = dict(
+        options=options,
+        label=label,
+        value=value,
+        width=width,
+        on_select=on_select,
+        # 收起态
+        border_color=BORDER_STRONG,
+        focused_border_color=ACCENT_BRIGHT,
+        bgcolor=BG_INPUT,
+        color=TEXT_BRIGHT,
+        label_style=ft.TextStyle(color=MUTED),
+        text_style=ft.TextStyle(color=TEXT_BRIGHT),
+        # 弹出菜单整体：深蓝底 + 青描边 + 无阴影
+        menu_style=ft.MenuStyle(
+            bgcolor=BG_PANEL,
+            side=ft.BorderSide(1, BORDER_STRONG),
+            shape=ft.RoundedRectangleBorder(radius=RADIUS_MD),
+            elevation=0,
+            shadow_color=TRANSPARENT,
+            padding=ft.Padding.all(4),
+        ),
+    )
+    base.update(kwargs)
+    return ft.Dropdown(**base)
+
+
 def required_label(text: str):
     """必填标签：冷灰文字 + 红色星号。"""
     import flet as ft

@@ -291,6 +291,76 @@ class TestStyleAlignmentUi(unittest.TestCase):
         self.assertEqual(option.key, "高")
         self.assertEqual(option.content.color, TEXT_BRIGHT)
 
+    def test_filter_dropdowns_use_dark_theme(self):
+        """工作列表筛选栏两个下拉：暗底青描边 + 弹出菜单深底 + 选项冷白字。"""
+        from theme import (BG_INPUT, BG_PANEL, BORDER_STRONG, ACCENT_BRIGHT,
+                           TEXT_BRIGHT, dark_dropdown, dark_option)
+        from pages.jobs import jobs_view
+
+        # helper 层：收起态 + 弹出菜单 + 选项样式
+        dd = dark_dropdown([dark_option("", "全部")])
+        self.assertEqual(dd.bgcolor, BG_INPUT)
+        self.assertEqual(dd.color, TEXT_BRIGHT)
+        self.assertEqual(dd.border_color, BORDER_STRONG)
+        self.assertEqual(dd.focused_border_color, ACCENT_BRIGHT)
+        self.assertIsNotNone(dd.menu_style)
+        self.assertEqual(dd.menu_style.bgcolor, BG_PANEL)
+        opt = dd.options[0]
+        self.assertEqual(opt.content.color, TEXT_BRIGHT)
+        self.assertIsNotNone(opt.style)
+
+        # 渲染层：筛选栏两个下拉都来自 dark_dropdown（menu_style 非空）
+        from data.service import PluginService
+        plugin = PluginService().create("稽查案件", 1, "", "jicha.py")
+        ctx._context_page.set(_FakePage("/jobs"))
+        try:
+            with Renderer().with_context():
+                body = Renderer().render(jobs_view)
+            dds = []
+            walk_controls(body, lambda n: isinstance(n, ft.Dropdown), dds)
+            filters = [d for d in dds if d.label in ("工作类型", "工作状态")]
+            self.assertEqual(len(filters), 2)
+            self.assertTrue(all(d.menu_style is not None for d in filters),
+                            "筛选下拉必须带暗色 menu_style，否则弹出层是系统浅色")
+
+            # 类型筛选必须含插件注入的类型，且全部选项都是暗色样式
+            type_filter = next(d for d in filters if d.label == "工作类型")
+            texts = [o.text for o in type_filter.options]
+            self.assertIn("全部", texts)
+            self.assertIn("通用工作", texts)
+            self.assertIn("稽查案件", texts, "筛选栏漏掉了插件注入的工作类型")
+            self.assertTrue(all(o.style is not None and o.content.color == TEXT_BRIGHT
+                                for o in type_filter.options),
+                            "每个选项都需显式暗色样式，否则首项/选中项是浅色看不清")
+        finally:
+            # walk_controls 会重新渲染 Component，删除必须放到所有断言之后
+            PluginService().delete(plugin.id)
+
+    def test_filter_dropdowns_reflect_selected_state(self):
+        """下拉必须回显当前筛选 state：选了'阻塞中'就不能还显示'全部'。"""
+        from common.pagination import Pagination
+        from pages.jobs import JobsView
+
+        ctx._context_page.set(_FakePage("/jobs"))
+        with Renderer().with_context():
+            body = Renderer().render(
+                JobsView,
+                current=1, set_current=lambda v: None,
+                page_size=10, set_page_size=lambda v: None,
+                keyword="", set_keyword=lambda v: None,
+                type="稽查案件", set_type=lambda v: None,
+                status="阻塞中", set_status=lambda v: None,
+                refresh_flag=True, set_refresh_flag=lambda v: None,
+                pagination=Pagination(1, 10),
+            )
+        dds = []
+        walk_controls(body, lambda n: isinstance(n, ft.Dropdown), dds)
+        filters = {d.label: d for d in dds if d.label in ("工作类型", "工作状态")}
+        self.assertEqual(filters["工作类型"].value, "稽查案件",
+                         "类型下拉写死 value='' 会导致选了插件类型仍显示'全部'")
+        self.assertEqual(filters["工作状态"].value, "阻塞中",
+                         "状态下拉写死 value='' 会导致选了'阻塞中'仍显示'全部'")
+
 
 class TestTaskUi(unittest.TestCase):
     """任务列表/弹窗：操作列可见、日期暗色末行、混合时区不闪退。"""
