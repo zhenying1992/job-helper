@@ -4,7 +4,6 @@
 """
 
 import datetime
-from typing import Callable
 
 import flet as ft
 
@@ -43,66 +42,64 @@ def _range(tasks: list):
     return lo, (hi - lo).days + 1
 
 
-class TaskGantt:
-    def __init__(self, job: Job, refresh_flag: bool, set_refresh_flag: Callable):
-        self.job = job
-        self.refresh_flag = refresh_flag
-        self.set_refresh_flag = set_refresh_flag
+@ft.component
+def TaskGantt(job: Job):
+    """任务甘特图：按天定位的时间条，逾期/完成按状态着色。"""
 
-    def build(self) -> ft.Control:
-        tasks = TaskService.query(self.job.id)
-        lo, span = _range(tasks)
-        day_w = TRACK_W / span
-        today_idx = (datetime.date.today() - lo).days
-        chart_h = ROW_H * max(len(tasks), 1)
+    tasks = TaskService.query(job.id)
+    lo, span = _range(tasks)
+    day_w = TRACK_W / span
+    today_idx = (datetime.date.today() - lo).days
+    chart_h = ROW_H * max(len(tasks), 1)
 
-        # 日期刻度 + 竖向网格线（只画一次，铺在每行轨道底层）
-        grid = []
-        header_cells = []
-        for i in range(span):
-            x = i * day_w
-            grid.append(ft.Container(left=x, top=0, width=1, height=chart_h,
-                                     bgcolor=BORDER_SOFT))
-            day = lo + datetime.timedelta(days=i)
-            header_cells.append(ft.Container(
-                width=day_w,
-                content=ft.Text(day.strftime('%m-%d'), color=ACCENT if i == today_idx else MUTED,
-                                size=FS_SM, text_align=ft.TextAlign.CENTER),
-            ))
-        if 0 <= today_idx < span:  # 今日高亮竖线
-            grid.append(ft.Container(left=today_idx * day_w + day_w / 2, top=0, width=2,
-                                     height=chart_h, bgcolor=ACCENT, shadow=glow(ACCENT, blur=8)))
+    # 日期刻度 + 竖向网格线（只画一次，铺在每行轨道底层）
+    grid = []
+    header_cells = []
+    for i in range(span):
+        x = i * day_w
+        grid.append(ft.Container(left=x, top=0, width=1, height=chart_h,
+                                 bgcolor=BORDER_SOFT))
+        day = lo + datetime.timedelta(days=i)
+        header_cells.append(ft.Container(
+            width=day_w,
+            content=ft.Text(day.strftime('%m-%d'), color=ACCENT if i == today_idx else MUTED,
+                            size=FS_SM, text_align=ft.TextAlign.CENTER),
+        ))
+    if 0 <= today_idx < span:  # 今日高亮竖线
+        grid.append(ft.Container(left=today_idx * day_w + day_w / 2, top=0, width=2,
+                                 height=chart_h, bgcolor=ACCENT, shadow=glow(ACCENT, blur=8)))
 
-        rows = []
-        for t in tasks:
-            start, end = _as_date(t.start_time), _as_date(t.end_time)
-            left = (start - lo).days * day_w + 2
-            width = max(((end - start).days + 1) * day_w - 4, 8)
-            color = _bar_color(t)
-            bar = ft.Container(
-                left=left, top=(ROW_H - BAR_H) / 2, width=width, height=BAR_H,
-                bgcolor=color, border_radius=RADIUS_MD, shadow=glow(color, blur=10),
-                tooltip=f"{t.name} · {start.strftime(DATE_FMT)} ~ {end.strftime(DATE_FMT)} · {t.status}",
-                content=ft.Text(t.name, color=WHITE, size=FS_SM, max_lines=1,
-                                overflow=ft.TextOverflow.ELLIPSIS),
-                alignment=ft.Alignment.CENTER,
-            )
-            rows.append(ft.Row([
-                ft.Container(width=NAME_W, content=ft.Text(
-                    t.name, color=TEXT, size=FS_MD, max_lines=1,
-                    overflow=ft.TextOverflow.ELLIPSIS, tooltip=t.name)),
-                ft.Container(width=TRACK_W, height=ROW_H, content=ft.Stack([*grid, bar])),
-            ], spacing=0))
+    rows = []
+    for t in tasks:
+        start, end = _as_date(t.start_time), _as_date(t.end_time)
+        left = (start - lo).days * day_w + 2
+        width = max(((end - start).days + 1) * day_w - 4, 8)
+        color = _bar_color(t)
+        bar = ft.Container(
+            left=left, top=(ROW_H - BAR_H) / 2, width=width, height=BAR_H,
+            bgcolor=color, border_radius=RADIUS_MD, shadow=glow(color, blur=10),
+            tooltip=f"{t.name} · {start.strftime(DATE_FMT)} ~ {end.strftime(DATE_FMT)} · {t.status}",
+            content=ft.Text(t.name, color=WHITE, size=FS_SM, max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS),
+            alignment=ft.Alignment.CENTER,
+        )
+        rows.append(ft.Row([
+            ft.Container(width=NAME_W, content=ft.Text(
+                t.name, color=TEXT, size=FS_MD, max_lines=1,
+                overflow=ft.TextOverflow.ELLIPSIS, tooltip=t.name)),
+            ft.Container(width=TRACK_W, height=ROW_H, content=ft.Stack([*grid, bar])),
+        ], spacing=0))
 
-        if not rows:
-            rows = [ft.Container(content=ft.Text("暂无任务", color=SLATE, size=FS_MD),
-                                 alignment=ft.Alignment.CENTER, height=120)]
+    if not rows:
+        rows = [ft.Container(content=ft.Text("暂无任务", color=SLATE, size=FS_MD),
+                             alignment=ft.Alignment.CENTER, height=120)]
 
-        return ft.Column([
-            ft.Row([
-                ft.Container(width=NAME_W, content=ft.Text("任务", color=TEXT_BRIGHT, size=FS_MD)),
-                ft.Row(header_cells, spacing=0),
-            ], spacing=0),
-            ft.Container(height=1, bgcolor=BORDER_SOFT),
-            ft.Column(rows, spacing=0, scroll=ft.ScrollMode.AUTO, expand=True),
-        ], expand=True, scroll=ft.ScrollMode.AUTO)
+    return ft.Column([
+        ft.Row([
+            ft.Container(width=NAME_W, content=ft.Text("任务", color=TEXT_BRIGHT, size=FS_MD)),
+            ft.Row(header_cells, spacing=0),
+        ], spacing=0),
+        ft.Container(height=1, bgcolor=BORDER_SOFT),
+        ft.Column(rows, spacing=0, scroll=ft.ScrollMode.AUTO, expand=True),
+    ], expand=True, scroll=ft.ScrollMode.AUTO)
+

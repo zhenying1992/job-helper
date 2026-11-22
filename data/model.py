@@ -44,8 +44,6 @@ class Job(BaseModel):
     start_time = DateTimeField(default=datetime.now)
     end_time = DateTimeField(default=datetime.now)
     created_time = DateTimeField(default=datetime.now)
-    updated_time = DateTimeField(default=datetime.now)
-    updated_content = CharField(default='')
     deleted = BooleanField(default=False)          # 软删除：进入回收站
 
     class Meta:

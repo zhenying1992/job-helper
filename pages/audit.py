@@ -1,17 +1,15 @@
 """工作审计台账。
 
-按时间线展示某工作下的审计日志，支持新增、删除与导出。
+按时间线展示某工作下的审计日志，支持手工新增记录。
 工作/任务的创建、更新、删除会在 Service 层自动埋点（见 LogService.record）。
 以弹窗形式从工作详情页右上角 ⋮ 菜单打开。
 """
 
 from collections.abc import Callable
-from datetime import datetime
 
 import flet as ft
 from flet.controls.base_control import skip_field
 
-from common.decorate import catch_error
 from common.util import datetime_2_date_str
 from constant import (
     BG_PANEL, BORDER_RADIUS, COLOR_PRIMARY, COLOR_TEXT, COLOR_WARN, DATE_TIME_FMT,
@@ -65,25 +63,16 @@ class AddLogDialog(ft.AlertDialog):
             self.on_saved()
 
 
-def _confirm_delete(log: Log, on_saved: Callable):
-    def confirm(_):
-        LogService.delete(log.id)
-        ft.context.page.pop_dialog()
-        if on_saved:
-            on_saved()
-
-    ft.context.page.show_dialog(ft.AlertDialog(
-        title=ft.Text("删除记录", color=COLOR_PRIMARY),
-        content=ft.Text(f"确定删除「{log.name}」这条记录？", color=COLOR_TEXT),
-        bgcolor=BG_PANEL,
-        actions=[
-            ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
-            ft.Button("删除", bgcolor=COLOR_WARN, color=BTN_TEXT, on_click=confirm),
-        ],
-    ))
+# 时间线圆点直径；纵线放在圆点中心（x = 半径 - 线宽/2），由圆点覆盖。
+TIMELINE_DOT = 10
+TIMELINE_LINE_X = 4
 
 
-def _log_item(log: Log, on_changed: Callable) -> ft.Control:
+def _log_item(log: Log) -> ft.Control:
+    """一条审计记录：左侧圆点 + 右侧时间/动作/内容/附件。
+
+    纵线由弹窗里贯穿整列的 Stack 图层提供，这里只负责圆点本身。
+    """
     children = [
         ft.Text(datetime_2_date_str(log.created_time, DATE_TIME_FMT), color=INFO, size=FS_MD),
         ft.Text(f"动作：{log.name}", color=COLOR_TEXT, size=FS_LG, weight=ft.FontWeight.W_500),
@@ -95,41 +84,23 @@ def _log_item(log: Log, on_changed: Callable) -> ft.Control:
 
     return ft.Row(
         controls=[
-            ft.Container(width=10, height=10, bgcolor=INFO, border_radius=5),
+            ft.Container(width=TIMELINE_DOT, height=TIMELINE_DOT,
+                         bgcolor=INFO, border_radius=TIMELINE_DOT / 2),
             ft.Container(width=14),
             ft.Column(children, spacing=2, expand=True),
-            ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=SLATE, icon_size=16,
-                          tooltip="删除记录", on_click=lambda e: _confirm_delete(log, on_changed)),
         ],
         vertical_alignment=ft.CrossAxisAlignment.START,
     )
 
 
-def export_text(job: Job, logs: list[Log]) -> str:
-    """导出为纯文本台账。"""
-    lines = [
-        f"审计台账 - {job.name}",
-        f"导出时间：{datetime_2_date_str(datetime.now(), DATE_TIME_FMT)}",
-        "=" * 40,
-    ]
-    if not logs:
-        lines.append("（暂无记录）")
-    for log in logs:
-        lines.append(f"[{datetime_2_date_str(log.created_time, DATE_TIME_FMT)}] {log.name}")
-        if log.content:
-            lines.append(f"    内容：{log.content}")
-        if log.related_files:
-            lines.append(f"    附件：{'、'.join(log.related_files)}")
-    return '\n'.join(lines)
-
-
 @ft.control("AlertDialog")
 class AuditDialog(ft.AlertDialog):
-    """审计台账弹窗：时间线 + 新增/删除/导出。"""
+    """审计台账弹窗：带纵向连线的时间线 + 新增记录。"""
 
     job: Job = skip_field()
     count_text: ft.Text = skip_field()
     log_column: ft.Column = skip_field()
+    timeline_line: ft.Container = skip_field()
 
     def init(self):
         self.title = ft.Text("审计台账", color=COLOR_PRIMARY, size=FS_XL,
@@ -138,6 +109,11 @@ class AuditDialog(ft.AlertDialog):
 
         self.count_text = ft.Text(color=SLATE, size=FS_MD)
         self.log_column = ft.Column([], spacing=12, scroll=ft.ScrollMode.AUTO, expand=True)
+        # 贯穿整条时间线的纵线：top/bottom 定位撑满列高，圆点绘制在其上层覆盖。
+        self.timeline_line = ft.Container(
+            left=TIMELINE_LINE_X, top=TIMELINE_DOT / 2, bottom=0, width=1,
+            bgcolor=LINE_COLOR,
+        )
 
         header = ft.Row([
             ft.Text("操作时间线", color=COLOR_TEXT, size=FS_LG, weight=ft.FontWeight.W_500),
@@ -151,13 +127,15 @@ class AuditDialog(ft.AlertDialog):
             content=ft.Column([
                 header,
                 ft.Divider(color=LINE_COLOR, height=1),
-                ft.Container(self.log_column, expand=True),
+                ft.Stack(
+                    controls=[self.timeline_line, self.log_column],
+                    fit=ft.StackFit.EXPAND, expand=True,
+                ),
             ], spacing=8),
         )
         self.actions = [
             ft.Button("新增记录", bgcolor=COLOR_PRIMARY, color=BTN_TEXT,
                       on_click=self._add),
-            ft.TextButton("导出", on_click=self._export),
             ft.TextButton("关闭", on_click=lambda e: ft.context.page.pop_dialog()),
         ]
         self._load()
@@ -166,8 +144,9 @@ class AuditDialog(ft.AlertDialog):
         """查询并重建时间线（不主动 update，供 init 首次构建）。"""
         logs = LogService.query(self.job.id)
         self.count_text.value = f"{len(logs)} 条记录"
+        self.timeline_line.visible = bool(logs)
         if logs:
-            self.log_column.controls = [_log_item(log, self._reload) for log in logs]
+            self.log_column.controls = [_log_item(log) for log in logs]
         else:
             self.log_column.controls = [
                 ft.Column([
@@ -178,7 +157,7 @@ class AuditDialog(ft.AlertDialog):
             ]
 
     def _reload(self):
-        """新增/删除后的回调：重建并刷新弹窗内容。"""
+        """新增记录后的回调：重建并刷新弹窗内容。"""
         self._load()
         self.update()
 
@@ -187,27 +166,7 @@ class AuditDialog(ft.AlertDialog):
             AddLogDialog(job_id=self.job.id, on_saved=self._reload)
         )
 
-    def _export(self, _):
-        logs = LogService.query(self.job.id)
-        ft.context.page.show_dialog(ft.AlertDialog(
-            title=ft.Text("审计台账导出", color=COLOR_PRIMARY),
-            content=ft.Text(export_text(self.job, logs), size=FS_SM),
-            bgcolor=BG_PANEL,
-            actions=[ft.TextButton("关闭", on_click=lambda e: ft.context.page.pop_dialog())],
-        ))
-
 
 def open_audit(job: Job):
     """从工作详情页 ⋮ 菜单打开审计弹窗。"""
     ft.context.page.show_dialog(AuditDialog(job=job))
-
-
-def open_export(job: Job):
-    """从 ⋮ 菜单直接导出纯文本审计台账。"""
-    logs = LogService.query(job.id)
-    ft.context.page.show_dialog(ft.AlertDialog(
-        title=ft.Text("审计台账", color=COLOR_PRIMARY),
-        content=ft.Text(export_text(job, logs), size=FS_SM),
-        bgcolor=BG_PANEL,
-        actions=[ft.TextButton("关闭", on_click=lambda e: ft.context.page.pop_dialog())],
-    ))

@@ -1,4 +1,8 @@
 import logging
+import os
+import subprocess
+import sys
+from pathlib import Path
 
 import flet as ft
 import flet_dropzone as ftd
@@ -14,7 +18,7 @@ from constant import (
 )
 from data.model import Job
 from data.service import AttachmentService, JobService
-from pages.audit import open_audit, open_export
+from pages.audit import open_audit
 from pages.task.board import TaskBoard
 from pages.task.gantt import TaskGantt
 from pages.task.list import task_list_view
@@ -72,18 +76,38 @@ def job_view():
     panel_h = max(int(getattr(page, "height", 0) or 900) - 168, 460)
 
     return ft.Column([
-        HeaderBar(job).build(),
+        HeaderBar(job),
         ft.Row([
-            Left(job, bump).build(),
+            Left(job, bump),
             ft.Container(width=20),
-            Right(job, views, current_view, set_current_view, refresh_flag, bump,
-                  panel_h).build(),
+            Right(job, views, current_view, set_current_view, bump, panel_h),
         ], expand=True, vertical_alignment=ft.CrossAxisAlignment.START),
     ], expand=True)
 
 
 def _toast(message: str):
     ft.context.page.show_dialog(ft.SnackBar(ft.Text(message, color=BTN_TEXT)))
+
+
+def _open_path(path: Path) -> None:
+    """用系统默认程序打开文件或目录（macOS / Windows / Linux）。"""
+    if not path.exists():
+        _toast(f"路径不存在：{path}")
+        return
+    try:
+        if sys.platform == 'win32':
+            os.startfile(str(path))  # noqa
+        elif sys.platform == 'darwin':
+            subprocess.run(['open', str(path)], check=False)
+        else:
+            subprocess.run(['xdg-open', str(path)], check=False)
+    except Exception:
+        logger.exception("打开失败：%s", path)
+        _toast(f"无法打开：{path}")
+
+
+# 附件列表列宽：面板 300 - 左右 padding 12*2 - 行内 padding 4*2 = 268 可用，留余量
+ATT_NAME_W, ATT_SIZE_W, ATT_OPS_W = 156, 56, 52
 
 
 @ft.component
@@ -212,231 +236,197 @@ def JobDetails(job: Job, bump=None):
     )
 
 
-class HeaderBar:
-    def __init__(self, job: Job):
-        self.job = job
+@ft.component
+def HeaderBar(job: Job):
+    """工作详情顶栏：返回、名称、状态、进度与右上角 ⋮ 菜单。"""
+    return ft.Container(
+        bgcolor=BG_HEADER_BAR,
+        content=ft.Row([
+            ft.TextButton("← 返回", on_click=lambda e: ft.context.page.navigate('/jobs'),
+                          style=ft.ButtonStyle(color=INACTIVE)),
+            ft.Text(job.name, color=ACTIVE, weight=ft.FontWeight.W_600,
+                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+            ft.Container(width=12),
+            ft.Container(ft.Text(job.status, color=BG_HEADER_BAR,
+                                 font_family=FONT_MONO, weight=ft.FontWeight.BOLD),
+                         bgcolor=ACTIVE, border_radius=4, shadow=glow(ACTIVE, blur=10)),
+            ft.Container(width=12),
+            ft.Text(f"进度：{job.progress}%", color=COLOR_TEXT, font_family=FONT_MONO),
+            ft.Container(expand=True),
+            ft.PopupMenuButton(
+                icon=ft.Icons.MORE_VERT,
+                items=[
+                    ft.PopupMenuItem("查看审计台账", icon=ft.Icons.HISTORY,
+                                     on_click=lambda e: open_audit(job)),
+                ],
+            ),
+        ]),
+    )
 
-    def build(self):
-        return ft.Container(
-            bgcolor=BG_HEADER_BAR,
+
+@ft.component
+def Attachments(job: Job, bump=None):
+    """附件区：拖拽文件落盘，列表实时遍历目录，支持打开与删除。
+
+    数据源始终是 get_attachment_path() 目录的实时遍历，不经审计记录。
+    """
+    folder = get_attachment_path(job.id)
+
+    def on_dropped(e):
+        names = AttachmentService.add_many(job.id, e.files)
+        _toast(f"已保存 {len(names)} 个附件")
+        if bump:
+            bump()
+
+    def open_file(name: str):
+        _open_path(folder / name)
+
+    def del_file(name: str):
+        AttachmentService.delete(job.id, name)
+        AttachmentService.record_delete(job.id, name)
+        if bump:
+            bump()
+
+    def open_folder(_):
+        _open_path(folder)
+
+    # 表头：字体整体调小、居中对齐
+    header = ft.Container(
+        bgcolor=BG_TABLE_HEAD, border_radius=RADIUS_SM,
+        padding=ft.Padding(4, 6, 4, 6),
+        content=ft.Row([
+            ft.Text("文件", size=FS_SM, color=ACCENT_SOFT, width=ATT_NAME_W),
+            ft.Text("大小", size=FS_SM, color=ACCENT_SOFT, width=ATT_SIZE_W,
+                    text_align=TextAlign.CENTER),
+            ft.Text("操作", size=FS_SM, color=ACCENT_SOFT, width=ATT_OPS_W,
+                    text_align=TextAlign.CENTER),
+        ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+    )
+
+    rows = []
+    for file in list_dir(folder):
+        name, size_h = file['name'], file['size_h']
+        rows.append(ft.Container(
+            padding=ft.Padding(4, 4, 4, 4),
+            border=ft.Border(bottom=ft.BorderSide(1, BORDER)),
             content=ft.Row([
-                ft.TextButton("← 返回", on_click=lambda e: ft.context.page.navigate('/jobs'),
-                              style=ft.ButtonStyle(color=INACTIVE)),
-                ft.Text(self.job.name, color=ACTIVE, weight=ft.FontWeight.W_600,
-                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                ft.Container(width=12),
-                ft.Container(ft.Text(self.job.status, color=BG_HEADER_BAR,
-                                     font_family=FONT_MONO, weight=ft.FontWeight.BOLD),
-                             bgcolor=ACTIVE, border_radius=4, shadow=glow(ACTIVE, blur=10)),
-                ft.Container(width=12),
-                ft.Text(f"进度：{self.job.progress}%", color=COLOR_TEXT, font_family=FONT_MONO),
-                ft.Container(expand=True),
-                ft.PopupMenuButton(
-                    icon=ft.Icons.MORE_VERT,
-                    items=[
-                        ft.PopupMenuItem("查看审计台账", icon=ft.Icons.HISTORY,
-                                         on_click=lambda e: open_audit(self.job)),
-                        ft.PopupMenuItem("导出审计台账", icon=ft.Icons.DOWNLOAD,
-                                         on_click=lambda e: open_export(self.job)),
-                    ],
+                # 名称定宽 + 单行折叠，tooltip 保留全名
+                ft.Container(
+                    width=ATT_NAME_W, tooltip=name,
+                    on_click=lambda e, n=name: open_file(n),
+                    content=ft.Text(name, size=FS_SM, color=TEXT_BRIGHT,
+                                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
                 ),
-            ]),
-        )
-
-
-class Left:
-    def __init__(self, job: Job, bump=None):
-        self.job = job
-        self.bump = bump
-
-    def build(self):
-        return ft.Column([
-            JobDetails(self.job, self.bump),
-            ft.Container(height=10),
-            self._attachments(),
-        ])
-
-    # 附件列表列宽：名称占大头，大小/操作定宽，避免长文件名撑破 300px 面板
-    # 面板 300 - 左右 padding 12*2 - 行内 padding 4*2 = 268 可用；留 4px 余量
-    _ATT_NAME_W = 156
-    _ATT_SIZE_W = 56
-    _ATT_OPS_W = 52
-
-    def _attachments(self):
-        """附件区：拖拽文件真实落盘，列表实时遍历目录，支持打开与删除。
-
-        数据源始终是 get_attachment_path() 目录的实时遍历，不经审计记录。
-        """
-        folder = get_attachment_path(self.job.id)
-
-        def open_path(path):
-            """用系统默认程序打开文件或目录。"""
-            if not path.exists():
-                _toast(f"路径不存在：{path}")
-                return
-            try:
-                import os
-                import subprocess
-                import sys
-                if sys.platform == 'win32':
-                    os.startfile(str(path))  # noqa
-                elif sys.platform == 'darwin':
-                    subprocess.run(['open', str(path)], check=False)
-                else:
-                    subprocess.run(['xdg-open', str(path)], check=False)
-            except Exception:
-                logger.exception("打开失败：%s", path)
-                _toast(f"无法打开：{path}")
-
-        def on_dropped(e):
-            names = AttachmentService.add_many(self.job.id, e.files)
-            _toast(f"已保存 {len(names)} 个附件")
-            if self.bump:
-                self.bump()
-
-        def open_file(name: str):
-            open_path(folder / name)
-
-        def del_file(name: str):
-            AttachmentService.delete(self.job.id, name)
-            AttachmentService.record_delete(self.job.id, name)
-            if self.bump:
-                self.bump()
-
-        def open_folder(_):
-            open_path(folder)
-
-        # 表头：字体整体调小、居中对齐
-        header = ft.Container(
-            bgcolor=BG_TABLE_HEAD, border_radius=RADIUS_SM,
-            padding=ft.Padding(4, 6, 4, 6),
-            content=ft.Row([
-                ft.Text("文件", size=FS_SM, color=ACCENT_SOFT, width=self._ATT_NAME_W),
-                ft.Text("大小", size=FS_SM, color=ACCENT_SOFT, width=self._ATT_SIZE_W,
-                        text_align=TextAlign.CENTER),
-                ft.Text("操作", size=FS_SM, color=ACCENT_SOFT, width=self._ATT_OPS_W,
-                        text_align=TextAlign.CENTER),
+                # 大小用更亮的颜色，右对齐便于读数
+                ft.Text(size_h, size=FS_SM, color=ACCENT_SOFT, width=ATT_SIZE_W,
+                        text_align=TextAlign.CENTER, font_family=FONT_MONO),
+                # 操作：两个紧凑图标按钮，去掉默认内边距
+                ft.Container(
+                    width=ATT_OPS_W,
+                    content=ft.Row([
+                        ft.IconButton(ft.Icons.OPEN_IN_NEW, icon_color=ACTIVE, icon_size=15,
+                                      width=24, height=24, padding=0, tooltip="打开",
+                                      on_click=lambda e, n=name: open_file(n)),
+                        ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=INACTIVE, icon_size=15,
+                                      width=24, height=24, padding=0, tooltip="删除",
+                                      on_click=lambda e, n=name: del_file(n)),
+                    ], spacing=0, alignment=MainAxisAlignment.CENTER,
+                       vertical_alignment=ft.CrossAxisAlignment.CENTER),
+                ),
             ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
+        ))
+
+    table = ft.Column([header, *rows], spacing=0) if rows else None
+
+    default = ft.Container(
+        ft.Column([
+            ft.Icon(ft.Icons.UPLOAD_FILE, size=28, color=INACTIVE),
+            ft.Text("拖入文件保存为附件", color=INACTIVE, size=FS_MD),
+        ], alignment=MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+        alignment=ft.Alignment.CENTER, height=90,
+    )
+
+    zone = ftd.Dropzone(
+        content=table or default,
+        on_dropped=on_dropped,
+    )
+    # 标题行：右侧文件夹按钮，打开附件所在目录
+    title = ft.Row([
+        ft.Text("工作附件", color=COLOR_PRIMARY, size=FS_MD, weight=ft.FontWeight.BOLD),
+        ft.IconButton(ft.Icons.FOLDER_OPEN, icon_color=ACCENT_SOFT, icon_size=16,
+                      width=26, height=26, padding=0, tooltip="打开附件文件夹",
+                      on_click=open_folder),
+    ], alignment=MainAxisAlignment.SPACE_BETWEEN,
+       vertical_alignment=ft.CrossAxisAlignment.CENTER)
+    return ft.Container(
+        width=300, bgcolor=BG_PANEL, border_radius=BORDER_RADIUS,
+        padding=12,
+        content=ft.Column([
+            title,
+            zone,
+        ], spacing=6, tight=True),
+    )
+
+
+@ft.component
+def Left(job: Job, bump=None):
+    """左侧栏：工作详情卡片 + 附件区。"""
+    return ft.Column([
+        JobDetails(job, bump),
+        ft.Container(height=10),
+        Attachments(job, bump),
+    ])
+
+
+def _switch_bar(views, current_view, set_current_view) -> ft.Control:
+    """视图切换栏：纯控件构造，状态由上层组件持有。"""
+    buttons = [
+        ft.TextButton(
+            label,
+            on_click=lambda e, key=key: set_current_view(key),
+            style=ft.ButtonStyle(color=ACTIVE if current_view == key else INACTIVE),
         )
-
-        rows = []
-        for file in list_dir(folder):
-            name, size_h = file['name'], file['size_h']
-            rows.append(ft.Container(
-                padding=ft.Padding(4, 4, 4, 4),
-                border=ft.Border(bottom=ft.BorderSide(1, BORDER)),
-                content=ft.Row([
-                    # 名称定宽 + 单行折叠，tooltip 保留全名
-                    ft.Container(
-                        width=self._ATT_NAME_W, tooltip=name,
-                        on_click=lambda e, n=name: open_file(n),
-                        content=ft.Text(name, size=FS_SM, color=TEXT_BRIGHT,
-                                        max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
-                    ),
-                    # 大小用更亮的颜色，右对齐便于读数
-                    ft.Text(size_h, size=FS_SM, color=ACCENT_SOFT, width=self._ATT_SIZE_W,
-                            text_align=TextAlign.CENTER, font_family=FONT_MONO),
-                    # 操作：两个紧凑图标按钮，去掉默认内边距
-                    ft.Container(
-                        width=self._ATT_OPS_W,
-                        content=ft.Row([
-                            ft.IconButton(ft.Icons.OPEN_IN_NEW, icon_color=ACTIVE, icon_size=15,
-                                          width=24, height=24, padding=0, tooltip="打开",
-                                          on_click=lambda e, n=name: open_file(n)),
-                            ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=INACTIVE, icon_size=15,
-                                          width=24, height=24, padding=0, tooltip="删除",
-                                          on_click=lambda e, n=name: del_file(n)),
-                        ], spacing=0, alignment=MainAxisAlignment.CENTER,
-                           vertical_alignment=ft.CrossAxisAlignment.CENTER),
-                    ),
-                ], spacing=0, vertical_alignment=ft.CrossAxisAlignment.CENTER),
-            ))
-
-        table = ft.Column([header, *rows], spacing=0) if rows else None
-
-        default = ft.Container(
-            ft.Column([
-                ft.Icon(ft.Icons.UPLOAD_FILE, size=28, color=INACTIVE),
-                ft.Text("拖入文件保存为附件", color=INACTIVE, size=FS_MD),
-            ], alignment=MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
-            alignment=ft.Alignment.CENTER, height=90,
-        )
-
-        zone = ftd.Dropzone(
-            content=table or default,
-            on_dropped=on_dropped,
-        )
-        # 标题行：右侧文件夹按钮，打开附件所在目录
-        title = ft.Row([
-            ft.Text("工作附件", color=COLOR_PRIMARY, size=FS_MD, weight=ft.FontWeight.BOLD),
-            ft.IconButton(ft.Icons.FOLDER_OPEN, icon_color=ACCENT_SOFT, icon_size=16,
-                          width=26, height=26, padding=0, tooltip="打开附件文件夹",
-                          on_click=open_folder),
-        ], alignment=MainAxisAlignment.SPACE_BETWEEN,
-           vertical_alignment=ft.CrossAxisAlignment.CENTER)
-        return ft.Container(
-            width=300, bgcolor=BG_PANEL, border_radius=BORDER_RADIUS,
-            padding=12,
-            content=ft.Column([
-                title,
-                zone,
-            ], spacing=6, tight=True),
-        )
+        for key, label in views
+    ]
+    return ft.Column([
+        ft.Row([*buttons, ft.Container(expand=True)]),
+        ft.Divider(color=BORDER, height=1),
+    ])
 
 
-class Right:
-    def __init__(self, job, views, current_view, set_current_view, refresh_flag, bump, panel_h=610):
-        self.job = job
-        self.views = views
-        self.current_view = current_view
-        self.set_current_view = set_current_view
-        self.refresh_flag = refresh_flag
-        self.bump = bump
-        self.panel_h = panel_h
+def _main_view(job, current_view, bump, panel_h) -> ft.Control:
+    """按当前 key 分派主视图：纯分派，不持有状态。"""
+    if current_view == 'list':
+        return task_list_view(job=job, on_changed=bump)
+    if current_view == 'board':
+        return TaskBoard(job, bump)
+    if current_view == 'gantt':
+        return TaskGantt(job)
+    if current_view == 'topology':
+        # TaskTopo 持有 @ft.observable 状态，必须挂在实例上，保持命令式入口
+        # 画布高度按右侧面板可用空间自适应，撑满高度（扣除 padding/切换栏/工具栏）
+        return TaskTopo(job, max(panel_h - 130, 400)).build()
+    if current_view.startswith('plugin:'):
+        plugin = find_for_type(job.type)
+        return build_view(plugin, job) if plugin else ft.Container()
+    return task_list_view(job=job)
 
-    def build(self):
-        # 用明确高度填满可用空间（由外层按窗口高度算好），保持已知可工作的内部
-        # 高度链：外层 Column 不 expand，主视图 Container expand + 左上对齐。
-        return ft.Container(
-            height=self.panel_h,
-            bgcolor=BG_PANEL, border_radius=BORDER_RADIUS, padding=20,
-            content=ft.Column([
-                self._switch_bar(),
-                ft.Container(self._main_view(), expand=True,
-                             alignment=ft.Alignment(-1.0, -1.0)),
-            ], spacing=4,
-                horizontal_alignment=ft.CrossAxisAlignment.START,
-                alignment=ft.MainAxisAlignment.START),
-            expand=True,
-        )
 
-    def _switch_bar(self):
-        buttons = [
-            ft.TextButton(
-                label,
-                on_click=lambda e, key=key: self.set_current_view(key),
-                style=ft.ButtonStyle(color=ACTIVE if self.current_view == key else INACTIVE),
-            )
-            for key, label in self.views
-        ]
-        return ft.Column([
-            ft.Row([*buttons, ft.Container(expand=True)]),
-            ft.Divider(color=BORDER, height=1),
-        ])
-
-    def _main_view(self):
-        view = self.current_view
-        if view == 'list':
-            return task_list_view(job=self.job, on_changed=self.bump)
-        if view == 'board':
-            return TaskBoard(self.job, self.bump).build()
-        if view == 'gantt':
-            return TaskGantt(self.job, self.refresh_flag, self.bump).build()
-        if view == 'topology':
-            # 画布高度按右侧面板可用空间自适应，撑满高度（扣除 padding/切换栏/工具栏）
-            return TaskTopo(self.job, max(self.panel_h - 130, 400)).build()
-        if view.startswith('plugin:'):
-            plugin = find_for_type(self.job.type)
-            return build_view(plugin, self.job) if plugin else ft.Container()
-        return task_list_view(job=self.job)
+@ft.component
+def Right(job, views, current_view, set_current_view, bump, panel_h=610):
+    """右侧主视图。用明确高度填满可用空间（外层按窗口高度算好），
+    保持已验证的高度链：外层 Column 不 expand，主视图 Container expand + 左上对齐。
+    """
+    return ft.Container(
+        height=panel_h,
+        bgcolor=BG_PANEL, border_radius=BORDER_RADIUS, padding=20,
+        content=ft.Column([
+            _switch_bar(views, current_view, set_current_view),
+            ft.Container(_main_view(job, current_view, bump, panel_h),
+                         expand=True, alignment=ft.Alignment(-1.0, -1.0)),
+        ], spacing=4,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+            alignment=ft.MainAxisAlignment.START),
+        expand=True,
+    )

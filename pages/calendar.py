@@ -30,7 +30,7 @@ from theme import (
     BG_CELL, BG_CELL_DIM, BG_TODAY, BORDER_SOFT as LINE, MUTED as TXT_DAY,
     TEXT_WEEKEND as TXT_DAY_WEEKEND, TEXT_DIM as TXT_DAY_DIM,
     BG_CANVAS, BORDER_STRONG, ACCENT, SLATE, TEXT_SUBTLE,
-    FS_XS, FS_SM, FS_MD, FS_XL,
+    FS_XS, FS_SM, FS_MD,
 )
 
 logger = logging.getLogger(__name__)
@@ -309,7 +309,7 @@ def calendar_view():
             ft.context.page.show_dialog(
                 UpdateTaskDialog(task=task, on_saved=lambda: set_rev(lambda v: v + 1))
             )
-        except Exception as ex:
+        except Exception:
             # 不想静默失败：导入路径或 dialog 签名不对时能立刻看到
             logger.exception("打开任务编辑失败")
 
@@ -431,7 +431,7 @@ def calendar_view():
                             year=ne.year, month=ne.month, day=ne.day
                         )
                     task.save()
-            except Exception as ex:
+            except Exception:
                 logger.exception("调整任务日期失败")
 
     def make_handle(

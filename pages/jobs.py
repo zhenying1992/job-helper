@@ -47,73 +47,45 @@ def jobs_view():
         refresh_flag=refresh_flag,
         set_refresh_flag=set_refresh_flag,
         pagination=pagination,
-    ).build()
+    )
 
 
-class JobsView:
-    def __init__(
-            self,
-            current: int,
-            set_current: Callable,
-            page_size: int,
-            set_page_size: Callable,
-            keyword: str,
-            set_keyword: Callable,
-            type: str,
-            set_type: Callable,
-            status: str,
-            set_status: Callable,
-            refresh_flag: bool,
-            set_refresh_flag: Callable,
-            pagination: Pagination,
-    ):
-        self.current = current
-        self.set_current = set_current
-        self.page_size = page_size
-        self.set_page_size = set_page_size
-        self.keyword = keyword
-        self.set_keyword = set_keyword
-        self.type = type
-        self.set_type = set_type
-        self.status = status
-        self.set_status = set_status
-        self.refresh_flag = refresh_flag
-        self.set_refresh_flag = set_refresh_flag
-        self.pagination = pagination
-
-    def build(self):
+@ft.component
+def JobsView(current: int, set_current: Callable, page_size: int,
+             set_page_size: Callable, keyword: str, set_keyword: Callable,
+             type: str, set_type: Callable, status: str, set_status: Callable,
+             refresh_flag: bool, set_refresh_flag: Callable,
+             pagination: Pagination):
+    """工作列表主体。所有状态由 jobs_view 持有并通过参数传入，本组件只负责呈现。"""
+    def _body():
         return ft.Container(
             padding=ft.Padding(left=24, right=24),
             content=ft.Column(
                 controls=[
-                    self.build_action_bar(),
-                    self.build_table(),
-                    self.build_pagination_bar(),
+                    build_action_bar(),
+                    build_table(),
+                    build_pagination_bar(),
                 ],
                 spacing=20
             ),
         )
 
     # 选择栏
-    def build_action_bar(self):
-        """顶部筛选栏
-
-        :return:
-        """
+    def build_action_bar():
+        """顶部筛选栏：搜索、类型/状态下拉与新增入口。"""
         return ft.Container(
             padding=ft.Padding(left=24, right=24, top=16, bottom=16),
             content=ft.Row(
                 controls=[
-                    # ft.Container(width=3),
                     ft.TextField(
-                        value=self.keyword,
+                        value=keyword,
                         hint_text="输入工作名称搜索",
                         width=320,
                         height=40,
                         border=ft.OutlineInputBorder(border_radius=RADIUS_LG),
                         bgcolor=BG_SEARCH,
                         text_size=FS_BASE,
-                        on_change=lambda e: self.set_keyword(e.control.value),
+                        on_change=lambda e: set_keyword(e.control.value),
                     ),
                     ft.Dropdown(
                         label="工作类型",
@@ -121,7 +93,7 @@ class JobsView:
                         options=[ft.DropdownOption(key='', text='全部')] +
                                 [ft.DropdownOption(key=i, text=i) for i in JobType.list()],
                         value="",
-                        on_select=lambda e: self.set_type(e.control.value),
+                        on_select=lambda e: set_type(e.control.value),
                     ),
                     ft.Dropdown(
                         label="工作状态",
@@ -130,7 +102,7 @@ class JobsView:
                             ft.DropdownOption(key=i, text=i) for i in Status.list()
                         ],
                         value="",
-                        on_select=lambda e: self.set_status(e.control.value),
+                        on_select=lambda e: set_status(e.control.value),
                     ),
                     ft.Container(expand=True),
                     ft.Button(
@@ -138,14 +110,14 @@ class JobsView:
                         bgcolor=BTN_ADD,
                         color=BTN_TEXT,
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=RADIUS_LG)),
-                        on_click=self.open_new_job_dialog,
+                        on_click=open_new_job_dialog,
                     )
                 ],
             )
         )
 
     # 表格
-    def open_new_job_dialog(self, e: ft.Event[ft.Button]):
+    def open_new_job_dialog(e: ft.Event[ft.Button]):
         plugins = PluginService.list()
         job_types = [JobType.COMMON] + [plugin.name for plugin in plugins]
 
@@ -183,11 +155,7 @@ class JobsView:
             locale=ft.Locale("zh", "Hans"),
             start_value=datetime.datetime(year=today.year, month=today.month, day=today.day),
             end_value=datetime.datetime(year=today_7.year, month=today_7.month, day=today_7.day),
-            # first_date=datetime.datetime(year=2024, month=1, day=1),
-            # last_date=datetime.datetime(year=2026, month=12, day=31),
             current_date=today,
-            # on_change=handle_change,
-            # on_dismiss=handle_dismissal,
         )
 
         picker_button = ft.Button(
@@ -215,7 +183,7 @@ class JobsView:
                 end_time=utc_2_naive_datetime(picker.end_value),
             )
             ft.context.page.pop_dialog()
-            self.set_refresh_flag(lambda v: not v)
+            set_refresh_flag(lambda v: not v)
 
         dialog = ft.AlertDialog(
             title=ft.Text("新建工作", size=FS_XXL, color=TEXT_TITLE, weight=ft.FontWeight.BOLD),
@@ -242,11 +210,11 @@ class JobsView:
         )
         ft.context.page.show_dialog(dialog=dialog)
 
-    def open_drop_job_dialog(self, e, job: Job):
+    def open_drop_job_dialog(e, job: Job):
         def drop_job(_):
             JobService.delete(id=job.id)
             ft.context.page.pop_dialog()
-            self.set_refresh_flag(lambda v: not v)
+            set_refresh_flag(lambda v: not v)
 
         dialog = ft.AlertDialog(
             title=ft.Text("删除工作", size=FS_XXL, color=TEXT_TITLE, weight=ft.FontWeight.BOLD),
@@ -262,7 +230,7 @@ class JobsView:
         )
         ft.context.page.show_dialog(dialog=dialog)
 
-    def build_table(self):
+    def build_table():
         # 表格定义
         return ft.Container(
             ft.Row(
@@ -291,13 +259,13 @@ class JobsView:
                         ft.DataColumn(label=ft.Text("操作", color=TEXT),
                                       heading_row_alignment=MainAxisAlignment.CENTER),
                     ],
-                    rows=self.list_row(),
+                    rows=list_row(),
                     expand=True
                 )]
             )
         )
 
-    def list_row(self):
+    def list_row():
         def view_handler(job_id):
             """单参数闭包：Flet 事件只回传一个事件对象，job_id 由闭包捕获。"""
             def _go(_e):
@@ -306,11 +274,11 @@ class JobsView:
 
         def drop_handler(job):
             def _drop(_e):
-                self.open_drop_job_dialog(_e, job)
+                open_drop_job_dialog(_e, job)
             return _drop
 
         _rows = []
-        for _job in self.pagination.data:
+        for _job in pagination.data:
             _row = ft.DataRow(cells=[
                 ft.DataCell(ft.Text(str(_job.id), color=TEXT, width=55, text_align=ft.TextAlign.CENTER)),
                 ft.DataCell(
@@ -345,24 +313,26 @@ class JobsView:
         return _rows
 
     # 分页
-    def build_pagination_bar(self):
+    def build_pagination_bar():
         # 分页控件
         return ft.Container(
             padding=ft.Padding(left=24, right=24, top=16, bottom=16),
             content=ft.Row([
-                ft.Text(f"共 {self.pagination.total} 条记录", color=MUTED),
+                ft.Text(f"共 {pagination.total} 条记录", color=MUTED),
                 ft.Container(expand=True),
                 ft.Container(width=10),
                 ft.Button(
                     "上一页",
-                    disabled=self.current <= 1,
-                    on_click=lambda e: self.set_current(self.current - 1), color=SLATE
+                    disabled=current <= 1,
+                    on_click=lambda e: set_current(current - 1), color=SLATE
                 ),
-                ft.Text(f"第 {self.pagination.current} / {self.pagination.total_page} 页", color=SLATE),
+                ft.Text(f"第 {pagination.current} / {pagination.total_page} 页", color=SLATE),
                 ft.Button(
                     "下一页",
-                    disabled=self.current >= self.pagination.total_page,
-                    on_click=lambda e: self.set_current(self.current + 1), color=SLATE
+                    disabled=current >= pagination.total_page,
+                    on_click=lambda e: set_current(current + 1), color=SLATE
                 ),
             ])
         )
+
+    return _body()

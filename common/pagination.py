@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass, field
-from typing import TypeVar, Generic, Optional
+from typing import TypeVar, Generic
 
 T = TypeVar("T")
 
@@ -10,8 +10,6 @@ class Pagination(Generic[T]):
     page_size: int
     total: int = 0
     data: list[T] = field(default_factory=list)
-    order: Optional[str] = None
-    sort: Optional[str] = None
 
     @property
     def total_page(self) -> int:

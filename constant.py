@@ -12,7 +12,6 @@ from theme import (
     JOB_FINISH as COLOR_JOB_FINISH,
     TASK_FINISH as COLOR_TASK_FINISH,
     SLATE as COLOR_UNKNOWN,
-    BG_MAIN,
     BG_PANEL,
     BG_HEADER,
     TEXT as COLOR_TEXT,
@@ -24,10 +23,26 @@ from theme import (
     ACCENT,
 )
 
+# 显式公开接口：这里的多数名字是 theme.py 的别名再导出，供 `from constant import *`
+# 及旧写法 `from constant import COLOR_TEXT` 使用；声明后静态检查也能正确识别。
+__all__ = [
+    'COLOR_DANGER', 'COLOR_WARN', 'COLOR_SAFE', 'COLOR_JOB_FINISH',
+    'COLOR_TASK_FINISH', 'COLOR_UNKNOWN', 'COLOR_TEXT', 'COLOR_PRIMARY',
+    'COLOR_SUCCESS', 'BG_PANEL', 'BG_HEADER', 'BORDER_RADIUS',
+    'NODE_W', 'NODE_H', 'ACCENT',
+    'DATE_FMT', 'DATE_TIME_FMT', 'DEFAULT_JOB_END_DAY', 'TREND_DAY',
+    'TREND_RANGES', 'DEFAULT_TREND_DAYS', 'OVERDUE',
+    'Status', 'Priority', 'JobType',
+]
+
 DATE_FMT = '%Y-%m-%d'
 DATE_TIME_FMT = '%Y-%m-%d %H:%M:%S'
 DEFAULT_JOB_END_DAY = 7
-TREND_DAY = 30  # 趋势图统计天数
+TREND_DAY = 30  # 趋势图统计天数上限（近 1 个月）
+
+# 工作进展图右上角的时间范围切换项：(按钮文案, 天数)
+TREND_RANGES = (('近7天', 7), ('近15天', 15), ('近1个月', 30))
+DEFAULT_TREND_DAYS = 7  # 折线图默认展示的天数
 
 # 逾期：未完成且已过结束时间时的展示状态（派生状态，非数据库枚举）
 OVERDUE = '逾期'

@@ -8,16 +8,13 @@ from constant import (
 from data.model import Job
 from data.service import TaskService
 from pages.task import CreateTaskDialog, DropTaskDialog, UpdateTaskDialog
-from theme import (
-    BORDER, BG_TABLE, BTN_TEXT, BG_HEADER_BAR, RADIUS_SM, FONT_MONO, FS_SM, FS_MD,
-)
+from theme import BORDER, BG_TABLE, BTN_TEXT, FS_MD
 
 
 @ft.component
 @catch_error
 def task_list_view(job: Job, on_changed=None):
-    # 自增计数触发重渲染；TaskList 会在每次重建时重新查库
-    # on_changed 冒泡到上层（job_view），让顶栏/左侧详情同步重算进度与状态
+    """任务列表容器：自增计数触发重渲染，on_changed 冒泡到工作详情页。"""
     _, set_refresh = ft.use_state(0)
 
     def bump():
@@ -25,54 +22,35 @@ def task_list_view(job: Job, on_changed=None):
         if on_changed:
             on_changed()
 
-    return TaskList(job=job, bump=bump).build()
+    return TaskList(job=job, bump=bump)
 
-class TaskList:
-    def __init__(self, job: Job, bump):
-        self.job = job
-        self.tasks = TaskService.query(job.id)
-        self.bump = bump
 
-    def build(self):
-        return ft.Container(
-            expand=True,
-            bgcolor=BG_PANEL,
-            border_radius=BORDER_RADIUS,
-            padding=20,
-            content=ft.Column(
-                controls=[
-                    self.build_header(),
-                    ft.Divider(color=BORDER, height=1),
+@ft.component
+def TaskList(job: Job, bump):
+    """任务列表主体：每次渲染实时查库，保证与看板/甘特同步。"""
+    tasks = TaskService.query(job.id)
 
-                    self.build_table(),
-
-                ],
-                expand=True
-            )
-        )
-
-    def build_header(self):
+    def header() -> ft.Control:
         return ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[
-                # ft.Text("任务信息", color=COLOR_PRIMARY, size=16, weight=ft.FontWeight.BOLD),
                 ft.Button(
                     "新建任务",
                     bgcolor=COLOR_PRIMARY,
                     color=BTN_TEXT,
                     on_click=lambda: ft.context.page.show_dialog(
                         CreateTaskDialog(
-                            job_id=self.job.id,
-                            on_saved=self.bump,
+                            job_id=job.id,
+                            on_saved=bump,
                         )
                     )
                 ),
             ]
         )
 
-    def build_table(self):
+    def table() -> ft.Control:
         rows = []
-        for task in self.tasks:
+        for task in tasks:
             rows.append(
                 ft.DataRow(
                     cells=[
@@ -94,13 +72,13 @@ class TaskList:
                             ft.TextButton(
                                 "编辑",
                                 on_click=lambda e, task=task: ft.context.page.show_dialog(
-                                    UpdateTaskDialog(task=task, on_saved=self.bump)
+                                    UpdateTaskDialog(task=task, on_saved=bump)
                                 )
                             ),
                             ft.TextButton(
                                 "删除",
                                 on_click=lambda e, task=task: ft.context.page.show_dialog(
-                                    DropTaskDialog(task=task, on_saved=self.bump)
+                                    DropTaskDialog(task=task, on_saved=bump)
                                 )
                             ),
                         ]))
@@ -126,9 +104,23 @@ class TaskList:
                         ft.DataColumn(label=ft.Text("操作", color=COLOR_TEXT)),
                     ],
                     rows=rows,
-                    # expand=True,
                 )],
                 tight=True,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # 子控件横向拉伸填满Column宽度
             )
         )
+
+    return ft.Container(
+        expand=True,
+        bgcolor=BG_PANEL,
+        border_radius=BORDER_RADIUS,
+        padding=20,
+        content=ft.Column(
+            controls=[
+                header(),
+                ft.Divider(color=BORDER, height=1),
+                table(),
+            ],
+            expand=True
+        )
+    )

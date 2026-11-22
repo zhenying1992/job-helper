@@ -8,7 +8,7 @@ import flet as ft
 import flet.canvas as cv
 
 from constant import NODE_H, NODE_W
-from data.model import Job, Task, Position
+from data.model import Job
 from data.service import TaskService
 from pages.task import CreateTaskDialog, UpdateTaskDialog, DropTaskDialog
 from theme import (
@@ -33,7 +33,7 @@ def _canvas_size(height: int | None = None) -> tuple[int, int]:
 
 
 # 导入期无渲染上下文，这里只是兜底；真实尺寸在 FlowEditorView 渲染时取窗口宽度。
-CANVAS_W, CANVAS_H = 900, 560
+CANVAS_H = 560
 
 # 颜色统一来自 theme；上面的别名保持下方绘图代码的可读性。
 

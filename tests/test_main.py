@@ -28,6 +28,22 @@ class TestSchema(unittest.TestCase):
         tables = set(db_module.db.get_tables())
         self.assertTrue({'job', 'task', 'log', 'plugin'} <= tables)
 
+    def test_tables_match_model_exactly(self):
+        """库结构严格等于当前模型：无多余列、无缺失列、无残留表。
+
+        运行时不做 schema 兼容，因此建出的表必须逐字段吻合模型定义。
+        """
+        from data.model import Job, Log, Plugin, Task  # noqa: F401
+        models = (Job, Task, Log, Plugin)
+        self.assertEqual(set(db_module.db.get_tables()),
+                         {m._meta.table_name for m in models})
+        for model in models:
+            table = model._meta.table_name
+            with self.subTest(table=table):
+                cols = {c.name for c in db_module.db.get_columns(table)}
+                fields = {f.column_name for f in model._meta.sorted_fields}
+                self.assertEqual(cols, fields)
+
     def test_priority_is_text(self):
         job = JobService.create(f"优先级测试-{datetime.now().timestamp()}", '通用工作', priority='高')
         self.assertEqual(Job.get_by_id(job.id).priority, '高')
@@ -76,7 +92,7 @@ class TestAuditLog(unittest.TestCase):
 
     def test_cascade_purge(self):
         """彻底删除才级联清理任务与日志；软删除仅移入回收站。"""
-        task = TaskService.create(self.job.id, '任务Y', 'd')
+        TaskService.create(self.job.id, '任务Y', 'd')
         LogService.create(self.job.id, '记录')
         JobService.purge(self.job.id)
         self.assertEqual(Task.select().where(Task.job == self.job.id).count(), 0)
@@ -130,17 +146,17 @@ class TestBackup(unittest.TestCase):
         self.assertFalse(AttachmentService.path_of(job.id, names[0]).exists())
 
     def test_plugin_meta_parsing(self):
-        from pages.setting import PluginContent
+        from pages.setting import _parse_meta
         plugin_file = Path(_TMP.name) / 'demo_plugin.py'
         plugin_file.write_text(
             'PLUGIN_NAME = "演示"\nPLUGIN_VERSION = 2\n'
             'PLUGIN_DESCRIPTION = "d"\ndef build(job):\n    return None\n',
             encoding='utf-8',
         )
-        self.assertEqual(PluginContent._parse_meta(plugin_file), ('演示', 2, 'd'))
+        self.assertEqual(_parse_meta(plugin_file), ('演示', 2, 'd'))
         plugin_file.write_text('PLUGIN_NAME = "x"\n', encoding='utf-8')
         with self.assertRaises(ValueError):
-            PluginContent._parse_meta(plugin_file)
+            _parse_meta(plugin_file)
 
 
 class TestEnums(unittest.TestCase):
@@ -184,6 +200,63 @@ class TestTrend(unittest.TestCase):
     def test_trend_has_today(self):
         trend = JobService.finish_trend(days=7)
         self.assertIn(datetime.now().strftime('%Y-%m-%d'), trend)
+
+    def test_trend_length_equals_days(self):
+        """折线图横坐标点数必须与所选天数一一对应（不含今天则多一天）。"""
+        for days in (7, 15, 30):
+            with self.subTest(days=days):
+                for trend in (JobService.finish_trend(days=days),
+                              TaskService.finish_trend(days=days)):
+                    self.assertEqual(len(trend), days)
+                    today = datetime.now().strftime('%Y-%m-%d')
+                    self.assertIn(today, trend)
+                    self.assertEqual(list(trend)[-1], today)
+
+
+class TestLatestUpdates(unittest.TestCase):
+    """首页「最新更新工作」改由审计日志驱动后的数据层约束。"""
+
+    def test_legacy_update_fields_removed(self):
+        """Job 上冗余的 updated_time / updated_content 字段已废弃。"""
+        fields = {f.name for f in Job._meta.sorted_fields}
+        self.assertNotIn('updated_time', fields)
+        self.assertNotIn('updated_content', fields)
+
+    def test_total_returns_plain_int(self):
+        self.assertIsInstance(JobService.total(), int)
+        self.assertIsInstance(TaskService.total(), int)
+
+    def test_latest_updates_uses_latest_log_per_job(self):
+        job = JobService.create(f"日志取数-{datetime.now().timestamp()}", '通用工作')
+        LogService.record(job.id, '自定义动作', '详情')
+
+        rows = LogService.latest_updates(limit=50)
+        ids = [log.job_id for log in rows]
+        self.assertEqual(len(ids), len(set(ids)), '每个工作只能出现一次')
+
+        mine = [log for log in rows if log.job_id == job.id]
+        self.assertEqual(len(mine), 1)
+        self.assertEqual(mine[0].name, '自定义动作', '应取该工作最新的一条日志')
+        self.assertEqual(mine[0].job.name, job.name, '关联的工作必须可用（无额外字段依赖）')
+        self.assertIsInstance(mine[0].created_time, datetime)
+
+    def test_latest_updates_excludes_recycled_jobs(self):
+        job = JobService.create(f"日志回收-{datetime.now().timestamp()}", '通用工作')
+        LogService.record(job.id, '删除前的动作')
+        JobService.delete(job.id)
+        self.assertNotIn(job.id, [log.job_id for log in LogService.latest_updates(limit=50)])
+
+    def test_latest_updates_ordered_by_log_time(self):
+        rows = LogService.latest_updates(limit=50)
+        times = [log.created_time for log in rows]
+        self.assertEqual(times, sorted(times, reverse=True))
+
+    def test_export_excludes_deprecated_fields(self):
+        from data.service import BackupService
+        data = BackupService.export_json()
+        for row in data['jobs']:
+            self.assertNotIn('updated_time', row)
+            self.assertNotIn('updated_content', row)
 
 
 class TestJobStatusDerivation(unittest.TestCase):

@@ -1,9 +1,8 @@
+import json
 import shutil
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
-
-from peewee import SQL
 
 from common.pagination import Pagination
 from common.util import datetime_2_date_str, cal_position
@@ -14,16 +13,11 @@ from constant import (
 from data.db import db
 from data.model import Job, Task, Log, Plugin, Position
 
-SQL_TRUE = SQL("1=1")
-
 # 允许通过 update() 修改的业务字段（id/关联键/时间戳等由系统维护）
 UPDATABLE_FIELDS = {
     'name', 'description', 'priority', 'status', 'start_time', 'end_time',
     'assignee', 'estimate_hours', 'tags',
 }
-
-
-import json
 
 
 def _changes(fields: dict) -> dict:
@@ -40,16 +34,12 @@ def _describe(changes: dict) -> str:
     return '，'.join(f'{k} → {v}' for k, v in changes.items())
 
 
-def _total(model, status: Optional[str], stale_field: str) -> tuple[int, int]:
-    """返回 (总数, 近 7 天未更新的数量)。stale 基准字段由调用方指定。"""
-    condition = [model.deleted == False]  # noqa: E712  软删除不计入统计
+def _total(model, status: Optional[str]) -> int:
+    """返回未删除的记录总数（软删除不计入统计）。"""
+    condition = [model.deleted == False]  # noqa: E712
     if status:
         condition.append(model.status == Status.normalize(status))
-    total = model.select().where(*condition).count()
-    stale = model.select().where(
-        *condition, getattr(model, stale_field) < datetime.now() - timedelta(days=7)
-    ).count()
-    return total, stale
+    return model.select().where(*condition).count()
 
 
 def _week_change(model, status: Optional[str] = None, field: str = 'created_time') -> int:
@@ -85,6 +75,27 @@ class LogService:
         return list(Log.select().where(Log.job == job_id).order_by(Log.id.desc()))
 
     @staticmethod
+    def latest_updates(limit: int = 10) -> list[Log]:
+        """每个工作取最新的一条审计日志，按日志时间倒序返回。
+
+        首页「最新更新工作」用：时间与动作都来自日志，不再依赖 Job 上
+        冗余的更新时间/更新内容字段；同一工作只出现一次。
+        """
+        rows = (Log.select(Log, Job).join(Job)
+                .where(Job.deleted == False)  # noqa: E712  回收站里的工作不展示
+                .order_by(Log.created_time.desc(), Log.id.desc()))
+        result: list[Log] = []
+        seen: set[int] = set()
+        for log in rows:
+            if log.job_id in seen:
+                continue
+            seen.add(log.job_id)
+            result.append(log)
+            if len(result) >= limit:
+                break
+        return result
+
+    @staticmethod
     def create(job_id: int, name: str, content: str = '',
                related_files: Optional[list[str]] = None) -> Log:
         log = Log(job_id=job_id, name=name, content=content)
@@ -96,10 +107,6 @@ class LogService:
     def record(job_id: int, action: str, detail: str = '', **kwargs):
         """供各 Service 调用的便捷埋点入口。"""
         return LogService.create(job_id, action, detail, **kwargs)
-
-    @staticmethod
-    def delete(id: int):
-        Log.delete_by_id(id)
 
 
 class JobService:
@@ -131,7 +138,6 @@ class JobService:
             progress=0, status=Status.normalize(status),
             start_time=start_time or now,
             end_time=end_time or now + timedelta(days=DEFAULT_JOB_END_DAY),
-            updated_content='新建工作',
         )
         LogService.record(job.id, '新建工作', f'类型：{type}，优先级：{priority}')
         return job
@@ -149,7 +155,7 @@ class JobService:
         return q.exists()
 
     @staticmethod
-    def update(id: int, updated_content: str = '更新工作', **fields):
+    def update(id: int, action: str = '更新工作', **fields):
         """按传入字段局部更新，并记录审计日志。"""
         changed = _changes(fields)
         if not changed:
@@ -157,9 +163,8 @@ class JobService:
         if 'status' in changed:
             changed['status'] = Status.normalize(changed['status'])
 
-        Job.update(**changed, updated_time=datetime.now(),
-                   updated_content=updated_content).where(Job.id == id).execute()
-        LogService.record(id, updated_content, _describe(changed))
+        Job.update(**changed).where(Job.id == id).execute()
+        LogService.record(id, action, _describe(changed))
 
     @staticmethod
     def delete(id: int):
@@ -216,13 +221,8 @@ class JobService:
         ).count()
         progress = int(done / total * 100) if total else 0
         status = JobService._derive_status(id, total, done)
-        Job.update(progress=progress, status=status, updated_time=datetime.now()) \
+        Job.update(progress=progress, status=status) \
             .where(Job.id == id).execute()
-
-    @staticmethod
-    def latest() -> list[Job]:
-        return list(Job.select().where(Job.deleted == False)  # noqa: E712
-                    .order_by(Job.updated_time.desc()).limit(10))
 
     @staticmethod
     def expire() -> list[Job]:
@@ -234,8 +234,8 @@ class JobService:
         ).order_by(Job.end_time).limit(10))
 
     @staticmethod
-    def total(status: Optional[str] = None) -> tuple[int, int]:
-        return _total(Job, status, 'updated_time')
+    def total(status: Optional[str] = None) -> int:
+        return _total(Job, status)
 
     @staticmethod
     def week_change(status: Optional[str] = None, field: str = 'created_time') -> int:
@@ -298,7 +298,7 @@ class TaskService:
         return Task.get_by_id(id)
 
     @staticmethod
-    def update(id: int, updated_content: str = '更新任务', **fields):
+    def update(id: int, action: str = '更新任务', **fields):
         """局部更新任务，同步工作进度并记录审计日志。"""
         changed = _changes(fields)
         if not changed:
@@ -309,7 +309,7 @@ class TaskService:
         task = TaskService.get(id)
         Task.update(**changed).where(Task.id == id).execute()
         JobService.sync_progress(task.job_id)
-        LogService.record(task.job_id, updated_content, f'{task.name}：{_describe(changed)}')
+        LogService.record(task.job_id, action, f'{task.name}：{_describe(changed)}')
 
     @staticmethod
     def delete(id: int):
@@ -338,8 +338,8 @@ class TaskService:
         return list(Task.select().where(Task.deleted == True).order_by(Task.id.desc()))  # noqa: E712
 
     @staticmethod
-    def total(status: Optional[str] = None) -> tuple[int, int]:
-        return _total(Task, status, 'end_time')
+    def total(status: Optional[str] = None) -> int:
+        return _total(Task, status)
 
     @staticmethod
     def week_change(status: Optional[str] = None, field: str = 'start_time') -> int:
@@ -407,15 +407,16 @@ class AttachmentService:
 
 
 def _daily_trend(model, days: int) -> dict[str, int]:
-    """统计过去 days 天内每天完成的数量，含当天。"""
+    """统计最近 days 天（含今天）每天完成的数量，按日期升序返回。"""
     today = datetime.now().date()
-    result = {datetime_2_date_str(datetime.combine(today - timedelta(days=i), datetime.min.time())): 0
-              for i in range(days, -1, -1)}
+    start = today - timedelta(days=days - 1)
+    result = {datetime_2_date_str(datetime.combine(start + timedelta(days=i), datetime.min.time())): 0
+              for i in range(days)}
 
     rows = model.select().where(
         model.deleted == False,  # noqa: E712
         model.status == Status.FINISHED,
-        model.end_time >= datetime.combine(today - timedelta(days=days), datetime.min.time()),
+        model.end_time >= datetime.combine(start, datetime.min.time()),
         model.end_time <= datetime.combine(today, datetime.max.time()),
     )
     for row in rows:
@@ -504,8 +505,7 @@ class BackupService:
     # 外键字段 → 存 id 的列名，导入时按此白名单还原，避免把导出元字段误写入
     _EXPORT_MODELS = (
         ('jobs', Job, ('id', 'type', 'name', 'description', 'progress', 'priority', 'status',
-                       'start_time', 'end_time', 'created_time', 'updated_time',
-                       'updated_content', 'deleted')),
+                       'start_time', 'end_time', 'created_time', 'deleted')),
         ('tasks', Task, ('id', 'job_id', 'name', 'description', 'priority', 'status',
                          'start_time', 'end_time', 'assignee', 'estimate_hours',
                          'tags', 'deleted', '_position')),
@@ -570,7 +570,7 @@ class BackupService:
                             except (ValueError, TypeError):
                                 fields[jf] = []
                     # 时间字段是 ISO 字符串 → datetime
-                    for tf in ('start_time', 'end_time', 'created_time', 'updated_time'):
+                    for tf in ('start_time', 'end_time', 'created_time'):
                         if tf in fields and isinstance(fields[tf], str):
                             fields[tf] = datetime.fromisoformat(fields[tf])
                     obj = model(**fields)

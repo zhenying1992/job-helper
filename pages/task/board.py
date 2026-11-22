@@ -9,7 +9,7 @@
 import flet as ft
 
 from common.decorate import catch_error
-from constant import OVERDUE, Priority, Status
+from constant import Priority, Status
 from data.model import Job
 from data.service import TaskService
 from pages.task import UpdateTaskDialog
@@ -131,28 +131,25 @@ def _column(status: str, tasks: list, bump) -> ft.Control:
     )
 
 
-class TaskBoard:
-    """看板视图挂载入口，风格与 TaskGantt/TaskTopo 一致。"""
+@ft.component
+@catch_error
+def TaskBoard(job: Job, bump=None):
+    """看板视图：按状态分列，拖拽后由 bump 触发上层刷新。"""
 
-    def __init__(self, job: Job, bump=None):
-        self.job = job
-        self.bump = bump
+    tasks = TaskService.query(job.id)  # 已过滤软删除
+    by_status: dict[str, list] = {s: [] for s in BOARD_ORDER}
+    for t in tasks:
+        key = Status.normalize(t.status)
+        if key in by_status:
+            by_status[key].append(t)
+    columns = [_column(s, by_status[s], bump) for s in BOARD_ORDER]
+    return ft.Container(
+        expand=True,
+        content=ft.Column([
+            ft.Text("任务看板 · 拖动卡片切换状态", color=ACCENT, size=FS_XL,
+                    weight=ft.FontWeight.BOLD),
+            ft.Row(columns, spacing=12, expand=True,
+                   vertical_alignment=ft.CrossAxisAlignment.STRETCH),
+        ], spacing=12, expand=True),
+    )
 
-    @catch_error
-    def build(self) -> ft.Control:
-        tasks = TaskService.query(self.job.id)  # 已过滤软删除
-        by_status: dict[str, list] = {s: [] for s in BOARD_ORDER}
-        for t in tasks:
-            key = Status.normalize(t.status)
-            if key in by_status:
-                by_status[key].append(t)
-        columns = [_column(s, by_status[s], self.bump) for s in BOARD_ORDER]
-        return ft.Container(
-            expand=True,
-            content=ft.Column([
-                ft.Text("任务看板 · 拖动卡片切换状态", color=ACCENT, size=FS_XL,
-                        weight=ft.FontWeight.BOLD),
-                ft.Row(columns, spacing=12, expand=True,
-                       vertical_alignment=ft.CrossAxisAlignment.STRETCH),
-            ], spacing=12, expand=True),
-        )

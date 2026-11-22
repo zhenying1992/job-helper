@@ -23,19 +23,16 @@ SELECTED = '#ffd166'       # 拓扑选中节点
 PURPLE = '#a855f7'         # 拓扑阻塞节点
 PURPLE_DARK = '#2d1b4e'    # 拓扑阻塞节点底色
 GREEN_DARK = '#04352c'     # 拓扑完成节点底色
-CHIP_WARN = '#1b3a5c'      # 状态标签底（深蓝底 + 亮字）
 BTN_ADD = '#0891b2'        # 新增按钮（深青）
 
 # ---------------------------------------------------------------- 背景色（由深到浅分层）
 BG_PAGE = '#04070f'        # 应用窗口（最深）
-BG_MAIN = '#060c18'
 BG_PANEL = '#0a1224'       # 面板
 BG_HEADER = '#0d1830'      # 页头
 BG_HEADER_BAR = '#08101f'  # 工作详情顶栏
 BG_CARD = '#0c1428'        # 卡片
 BG_CARD_ALT = '#101c38'    # 拓扑卡片
 BG_CANVAS = '#070d1b'      # 画布 / 日历
-BG_CHART = '#070d1b'       # 图表
 BG_INPUT = '#0c1730'       # 输入框
 BG_SEARCH = '#0b152c'      # 搜索框
 BG_TABLE = '#0a1224'       # 表格
@@ -67,7 +64,6 @@ BORDER_ACCENT = '#22d3ee66'  # 卡片青色描边（带透明）
 TRANSPARENT = '#01000000'  # 全透明
 
 # ---------------------------------------------------------------- 发光 / 阴影（科技感核心）
-GLOW_ACCENT = '#22d3ee'    # 主光晕色
 GLOW_SOFT = '#22d3ee33'    # 柔和光晕（带透明，用于卡片）
 SHADOW_BLUR = 16           # 光晕模糊半径
 SHADOW_SPREAD = 1          # 光晕扩散半径
@@ -92,7 +88,6 @@ NODE_W, NODE_H = 140, 60   # 拓扑节点长宽
 # 科技感：数值/代码用等宽字体，界面用系统无衬线字体。
 # Flet 通过 Text(font_family=...) 指定；系统等宽字体无需打包字体文件。
 FONT_MONO = 'monospace'    # 数字、进度、时间等数据
-FONT_FAMILY = ''           # 界面字体留空 → 跟随系统
 FS_XS = 10
 FS_SM = 11
 FS_MD = 12
@@ -100,16 +95,9 @@ FS_LG = 13
 FS_BASE = 14
 FS_TAB = 15
 FS_XL = 16
-FS_DLG = 18
 FS_XXL = 20
 FS_DISPLAY = 26
 FS_METRIC = 40
-FS_ICON = 32
-FS_ICON_LG = 36
 
 # ---------------------------------------------------------------- 表格样式
-TABLE_BG = BG_TABLE
-TABLE_HEAD_BG = BG_TABLE_HEAD
 TABLE_RADIUS = RADIUS
-TABLE_TEXT = TEXT
-TABLE_HEAD_TEXT = ACCENT_SOFT
