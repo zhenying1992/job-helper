@@ -5,8 +5,17 @@ from zoneinfo import ZoneInfo
 from constant import DATE_FMT, NODE_W, NODE_H
 
 
-def utc_2_naive_datetime(utc_dt: datetime) -> datetime:
-    return utc_dt.astimezone(ZoneInfo(key='Asia/Shanghai')).replace(tzinfo=None)
+def as_naive(dt: datetime | None) -> datetime | None:
+    """把 datetime 归一为东八区 naive 时间，已是 naive 或 None 则原样返回。
+
+    Flet 的 DatePicker.value 返回带 UTC tzinfo 的 aware 时间，而 datetime.now()
+    及库里绝大多数记录是 naive。二者混用会在 min/max、>= 等比较时抛
+    "can't compare offset-naive and offset-aware datetimes"。所有时间入库前
+    与聚合比较前统一走这里，保证口径一致。
+    """
+    if dt is None or dt.tzinfo is None:
+        return dt
+    return dt.astimezone(ZoneInfo(key='Asia/Shanghai')).replace(tzinfo=None)
 
 
 def datetime_2_date_str(dt: datetime, fmt: str = DATE_FMT) -> str:

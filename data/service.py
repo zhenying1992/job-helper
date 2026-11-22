@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from common.pagination import Pagination
-from common.util import datetime_2_date_str, cal_position
+from common.util import datetime_2_date_str, cal_position, as_naive
 from config import get_attachment_path, get_backup_path
 from constant import (
     DEFAULT_JOB_END_DAY, TREND_DAY, Priority, Status,
@@ -23,6 +23,10 @@ UPDATABLE_FIELDS = {
 def _changes(fields: dict) -> dict:
     """从入参里挑出允许更新且非 None 的字段。"""
     changed = {k: v for k, v in fields.items() if k in UPDATABLE_FIELDS and v is not None}
+    # 时间统一归一为 naive，避免 DatePicker 的 aware 时间与 now() 混用导致比较崩溃
+    for key in ('start_time', 'end_time'):
+        if key in changed:
+            changed[key] = as_naive(changed[key])
     # tags 是 Python 列表，批量 update 前需序列化为 JSON 字符串
     if 'tags' in changed and not isinstance(changed['tags'], str):
         changed['tags'] = json.dumps(changed['tags'], ensure_ascii=False)
@@ -136,8 +140,8 @@ class JobService:
         job = Job.create(
             name=name, type=type, description=description, priority=priority,
             progress=0, status=Status.normalize(status),
-            start_time=start_time or now,
-            end_time=end_time or now + timedelta(days=DEFAULT_JOB_END_DAY),
+            start_time=as_naive(start_time) or now,
+            end_time=as_naive(end_time) or now + timedelta(days=DEFAULT_JOB_END_DAY),
         )
         LogService.record(job.id, '新建工作', f'类型：{type}，优先级：{priority}')
         return job
@@ -214,6 +218,30 @@ class JobService:
         return Status.NOT_START
 
     @staticmethod
+    def time_ranges(ids: list[int]) -> dict[int, tuple[Optional[datetime], Optional[datetime]]]:
+        """按任务聚合工作起止时间：最早开始、最晚结束；无任务返回 (None, None)。"""
+        result = {job_id: (None, None) for job_id in ids}
+        if not ids:
+            return result
+        rows = Task.select(Task.job, Task.start_time, Task.end_time).where(
+            Task.job.in_(ids), Task.deleted == False,  # noqa: E712
+        )
+        for task in rows:
+            start, end = result.get(task.job_id, (None, None))
+            # 历史库可能残留 DatePicker 写入的 aware 时间，比较前统一归一
+            t_start, t_end = as_naive(task.start_time), as_naive(task.end_time)
+            result[task.job_id] = (
+                min(start, t_start) if start else t_start,
+                max(end, t_end) if end else t_end,
+            )
+        return result
+
+    @staticmethod
+    def time_range(id: int) -> tuple[Optional[datetime], Optional[datetime]]:
+        """单个工作的时间范围，便于详情页调用。"""
+        return JobService.time_ranges([id])[id]
+
+    @staticmethod
     def sync_progress(id: int):
         total = Task.select().where(Task.job == id, Task.deleted == False).count()  # noqa: E712
         done = Task.select().where(
@@ -221,8 +249,11 @@ class JobService:
         ).count()
         progress = int(done / total * 100) if total else 0
         status = JobService._derive_status(id, total, done)
-        Job.update(progress=progress, status=status) \
-            .where(Job.id == id).execute()
+        fields = {'progress': progress, 'status': status}
+        start, end = JobService.time_range(id)
+        if start and end:  # 有任务时同步，无任务保留默认时间
+            fields.update(start_time=start, end_time=end)
+        Job.update(**fields).where(Job.id == id).execute()
 
     @staticmethod
     def expire() -> list[Job]:
@@ -282,8 +313,8 @@ class TaskService:
         x, y = cal_position(Task.select().where(Task.job == job_id).count())
         task = Task(
             job_id=job_id, name=name, description=description, priority=priority,
-            status=Status.normalize(status), start_time=start_time or now,
-            end_time=end_time or now + timedelta(days=DEFAULT_JOB_END_DAY),
+            status=Status.normalize(status), start_time=as_naive(start_time) or now,
+            end_time=as_naive(end_time) or now + timedelta(days=DEFAULT_JOB_END_DAY),
             assignee=assignee or '', estimate_hours=estimate_hours or 0,
             position=Position(x=x, y=y, downstreams=downstreams or []),
         )

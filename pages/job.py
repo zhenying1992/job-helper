@@ -79,7 +79,7 @@ def job_view():
         HeaderBar(job),
         ft.Row([
             Left(job, bump),
-            ft.Container(width=20),
+            ft.Container(width=12),  # 左右板块间距收紧（原 20）
             Right(job, views, current_view, set_current_view, bump, panel_h),
         ], expand=True, vertical_alignment=ft.CrossAxisAlignment.START),
     ], expand=True)
@@ -157,6 +157,18 @@ def JobDetails(job: Job, bump=None):
             _label(f"{label}:"), value,
         ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4)
 
+    def _time_fields(job_id: int) -> list[ft.Control]:
+        """起止时间取任务的最早开始/最晚结束，无任务显示「-」。"""
+        start, end = JobService.time_range(job_id)
+        return [
+            _field("开始时间", ft.Text(
+                datetime_2_date_str(start, DATE_FMT) if start else "-",
+                color=COLOR_TEXT, size=13)),
+            _field("结束时间", ft.Text(
+                datetime_2_date_str(end, DATE_FMT) if end else "-",
+                color=COLOR_TEXT, size=13)),
+        ]
+
     def editable(label: str, field: str):
         """展示态文本 + 编辑按钮；编辑态紧凑输入框/选择器 + 保存/取消。
 
@@ -209,10 +221,7 @@ def JobDetails(job: Job, bump=None):
             editable("名称", "name"),
             editable("描述", "description"),
             editable("优先级", "priority"),
-            _field("开始时间", ft.Text(datetime_2_date_str(job.start_time, DATE_FMT),
-                                       color=COLOR_TEXT, size=13)),
-            _field("结束时间", ft.Text(datetime_2_date_str(job.end_time, DATE_FMT),
-                                       color=COLOR_TEXT, size=13)),
+            *_time_fields(job.id),
             ft.Row([
                 _label("进度:"),
                 ft.Stack([
@@ -222,17 +231,10 @@ def JobDetails(job: Job, bump=None):
                     ft.Text(f"{job.progress}%", size=11),
                 ], width=160, alignment=ft.Alignment.CENTER),
             ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-            ft.Row([
-                _label("状态:"),
-                ft.Container(
-                    ft.Text(job.status, color=BG_HEADER_BAR, size=12,
-                            font_family=FONT_MONO, weight=ft.FontWeight.BOLD),
-                    bgcolor=Status.color(job.status),
-                    border_radius=RADIUS_SM,
-                    padding=ft.Padding(8, 2, 8, 2),
-                ),
-            ], height=ROW_H, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=4),
-        ], spacing=6),
+            _field("状态", ft.Text(
+                Status.normalize(job.status), color=Status.color(job.status),
+                size=13, weight=ft.FontWeight.BOLD)),
+        ], spacing=4),  # 行距收紧（原 6），开始/结束时间两行更紧凑
     )
 
 

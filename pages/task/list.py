@@ -48,26 +48,41 @@ def TaskList(job: Job, bump):
             ]
         )
 
+    # 每列定宽，表头与内容用同一宽度并居中，保证逐列对齐
+    COLS = [
+        ("ID", 45), ("任务", 100), ("状态", 80), ("负责人", 70),
+        ("标签", 90), ("工时", 55), ("开始时间", 100), ("结束时间", 100),
+        ("操作", 110),
+    ]
+
+    def cell(text, width, color=COLOR_TEXT, **kwargs) -> ft.Text:
+        return ft.Text(str(text), color=color, width=width,
+                       text_align=ft.TextAlign.CENTER, **kwargs)
+
+    def col(label: str, width: int) -> ft.DataColumn:
+        return ft.DataColumn(label=cell(label, width, weight=ft.FontWeight.BOLD))
+
     def table() -> ft.Control:
+        widths = [w for _, w in COLS]  # ID/任务/状态/负责人/标签/工时/开始/结束/操作
         rows = []
         for task in tasks:
+            w_id, w_name, w_status, w_owner, w_tags, w_hours, w_start, w_end, w_ops = widths
             rows.append(
                 ft.DataRow(
                     cells=[
-                        ft.DataCell(ft.Text(str(task.id), color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(task.name, color=COLOR_TEXT)),
-                        ft.DataCell(
-                            ft.Text(
-                                Status.normalize(task.status), color=Status.color(task.status),
-                                size=FS_MD, weight=ft.FontWeight.BOLD, width=80,
-                                text_align=ft.TextAlign.CENTER,
-                            )
-                        ),
-                        ft.DataCell(ft.Text(task.assignee or '-', color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(', '.join(task.tags) or '-', color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(f'{task.estimate_hours}h' if task.estimate_hours else '-', color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(datetime_2_date_str(task.start_time), color=COLOR_TEXT)),
-                        ft.DataCell(ft.Text(datetime_2_date_str(task.end_time), color=COLOR_TEXT)),
+                        ft.DataCell(cell(task.id, w_id)),
+                        ft.DataCell(cell(task.name, w_name)),
+                        ft.DataCell(cell(
+                            Status.normalize(task.status), w_status,
+                            color=Status.color(task.status), size=FS_MD,
+                            weight=ft.FontWeight.BOLD,
+                        )),
+                        ft.DataCell(cell(task.assignee or '-', w_owner)),
+                        ft.DataCell(cell(', '.join(task.tags) or '-', w_tags)),
+                        ft.DataCell(cell(
+                            f'{task.estimate_hours}h' if task.estimate_hours else '-', w_hours)),
+                        ft.DataCell(cell(datetime_2_date_str(task.start_time), w_start)),
+                        ft.DataCell(cell(datetime_2_date_str(task.end_time), w_end)),
                         ft.DataCell(ft.Row([
                             ft.TextButton(
                                 "编辑",
@@ -81,7 +96,7 @@ def TaskList(job: Job, bump):
                                     DropTaskDialog(task=task, on_saved=bump)
                                 )
                             ),
-                        ]))
+                        ], alignment=ft.MainAxisAlignment.CENTER, width=w_ops)),
                     ]
                 )
             )
@@ -92,17 +107,11 @@ def TaskList(job: Job, bump):
                     border_radius=BORDER_RADIUS,
                     bgcolor=BG_TABLE,
                     heading_row_color=BG_HEADER,
-                    columns=[
-                        ft.DataColumn(label=ft.Text("ID", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("任务", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("状态", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("负责人", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("标签", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("工时", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("开始时间", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("结束时间", color=COLOR_TEXT)),
-                        ft.DataColumn(label=ft.Text("操作", color=COLOR_TEXT)),
-                    ],
+                    # 默认列间距约 32px，9 列累计会超出面板宽度把最后一列（操作）
+                    # 挤出可视区，导致编辑/删除按钮看不到。收紧间距与左右边距。
+                    column_spacing=10,
+                    horizontal_margin=8,
+                    columns=[col(label, width) for label, width in COLS],
                     rows=rows,
                 )],
                 tight=True,

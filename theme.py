@@ -77,6 +77,63 @@ def glow(color: str = GLOW_SOFT, blur: int = SHADOW_BLUR,
         spread_radius=spread, blur_radius=blur, color=color, offset=offset,
     )
 
+
+# ---------------------------------------------------------------- 弹窗表单统一样式
+# 新建工作 / 新建（更新）任务两个弹窗共用，保证风格一致。
+FORM_COL_W = 215                              # 两列布局单列宽
+FORM_GAP = 10                                 # 两列间距
+FORM_FULL_W = FORM_COL_W * 2 + FORM_GAP       # 全宽字段 440，与两列严格对齐
+
+
+def form_field(kind, **kwargs):
+    """暗色科技感输入控件：青色描边 + 深蓝底 + 冷白字。
+
+    kind 传 ft.TextField / ft.Dropdown 等类；kwargs 覆盖同名默认项，
+    这样各弹窗只需声明布局与差异项，样式不会漂移。
+    """
+    import flet as ft
+    base = dict(
+        border_color=ACCENT_BRIGHT,
+        focused_border_color=ACCENT_BRIGHT,
+        bgcolor=BG_INPUT,
+        color=TEXT_BRIGHT,
+        label_style=ft.TextStyle(color=MUTED),
+        text_style=ft.TextStyle(color=TEXT_BRIGHT),
+    )
+    base.update(kwargs)
+    return kind(**base)
+
+
+def form_option(value: str):
+    """下拉选项：显式亮色文字，避免系统默认深色在暗底上看不清。"""
+    import flet as ft
+    return ft.DropdownOption(
+        key=value, text=value, content=ft.Text(value, color=TEXT_BRIGHT),
+    )
+
+
+def required_label(text: str):
+    """必填标签：冷灰文字 + 红色星号。"""
+    import flet as ft
+    return ft.Text(spans=[
+        ft.TextSpan(text, style=ft.TextStyle(color=MUTED, size=FS_BASE)),
+        ft.TextSpan(" *", style=ft.TextStyle(color=DANGER, size=FS_BASE)),
+    ])
+
+
+def primary_button(text: str, on_click, **kwargs):
+    """主操作按钮：亮青底 + 深色字 + 圆角。"""
+    import flet as ft
+    base = dict(
+        content=text,
+        bgcolor=ACCENT_BRIGHT,
+        color=TEXT_ON_DARK,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=RADIUS_LG)),
+        on_click=on_click,
+    )
+    base.update(kwargs)
+    return ft.Button(**base)
+
 # ---------------------------------------------------------------- 圆角 / 节点尺寸
 RADIUS = 10
 RADIUS_SM = 4

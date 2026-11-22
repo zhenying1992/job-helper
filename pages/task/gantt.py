@@ -15,8 +15,10 @@ from theme import (
     RADIUS_MD, FS_SM, FS_MD, glow,
 )
 
-NAME_W = 130       # 左侧任务名列宽
-TRACK_W = 900      # 时间条轨道总宽（横向可滚动）
+NAME_W = 130       # 左侧任务名列宽（冻结，不随轨道横向滚动）
+TRACK_W = 900      # 时间条轨道基准宽度（跨度小时按此均分）
+MIN_DAY_W = 48     # 每日最小宽度：小于此值 MM-DD 标签会挤成碎片
+HEADER_H = 28      # 日期刻度表头高度
 ROW_H = 32         # 每行高度
 BAR_H = 18         # 时间条高度
 
@@ -48,7 +50,9 @@ def TaskGantt(job: Job):
 
     tasks = TaskService.query(job.id)
     lo, span = _range(tasks)
-    day_w = TRACK_W / span
+    # 每日至少 MIN_DAY_W，保证 MM-DD 标签完整；跨度小时仍按 TRACK_W 均分铺满
+    day_w = max(TRACK_W / span, MIN_DAY_W)
+    track_w = day_w * span
     today_idx = (datetime.date.today() - lo).days
     chart_h = ROW_H * max(len(tasks), 1)
 
@@ -63,13 +67,14 @@ def TaskGantt(job: Job):
         header_cells.append(ft.Container(
             width=day_w,
             content=ft.Text(day.strftime('%m-%d'), color=ACCENT if i == today_idx else MUTED,
-                            size=FS_SM, text_align=ft.TextAlign.CENTER),
+                            size=FS_SM, text_align=ft.TextAlign.CENTER, no_wrap=True),
         ))
     if 0 <= today_idx < span:  # 今日高亮竖线
         grid.append(ft.Container(left=today_idx * day_w + day_w / 2, top=0, width=2,
                                  height=chart_h, bgcolor=ACCENT, shadow=glow(ACCENT, blur=8)))
 
     rows = []
+    names = []  # 冻结的任务名列，与时间轨道分行平行
     for t in tasks:
         start, end = _as_date(t.start_time), _as_date(t.end_time)
         left = (start - lo).days * day_w + 2
@@ -83,23 +88,37 @@ def TaskGantt(job: Job):
                             overflow=ft.TextOverflow.ELLIPSIS),
             alignment=ft.Alignment.CENTER,
         )
-        rows.append(ft.Row([
-            ft.Container(width=NAME_W, content=ft.Text(
-                t.name, color=TEXT, size=FS_MD, max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS, tooltip=t.name)),
-            ft.Container(width=TRACK_W, height=ROW_H, content=ft.Stack([*grid, bar])),
-        ], spacing=0))
+        names.append(ft.Container(
+            width=NAME_W, height=ROW_H,
+            content=ft.Text(t.name, color=TEXT, size=FS_MD, max_lines=1,
+                            overflow=ft.TextOverflow.ELLIPSIS, tooltip=t.name),
+            alignment=ft.Alignment(-1.0, 0.0),
+        ))
+        rows.append(ft.Container(width=track_w, height=ROW_H,
+                                 content=ft.Stack([*grid, bar])))
 
     if not rows:
-        rows = [ft.Container(content=ft.Text("暂无任务", color=SLATE, size=FS_MD),
-                             alignment=ft.Alignment.CENTER, height=120)]
+        names.append(ft.Container(width=NAME_W, height=120))
+        rows.append(ft.Container(width=track_w, content=ft.Text(
+            "暂无任务", color=SLATE, size=FS_MD), alignment=ft.Alignment.CENTER, height=120))
 
-    return ft.Column([
-        ft.Row([
-            ft.Container(width=NAME_W, content=ft.Text("任务", color=TEXT_BRIGHT, size=FS_MD)),
-            ft.Row(header_cells, spacing=0),
-        ], spacing=0),
+    # 时间轴轨道：横向可滚动；任务名列冻结在左侧，只随纵向滚动
+    timeline = ft.Column([
+        ft.Row(header_cells, spacing=0),
         ft.Container(height=1, bgcolor=BORDER_SOFT),
-        ft.Column(rows, spacing=0, scroll=ft.ScrollMode.AUTO, expand=True),
-    ], expand=True, scroll=ft.ScrollMode.AUTO)
+        ft.Column(rows, spacing=0),
+    ], spacing=0, width=track_w)
+    frozen_names = ft.Column([
+        ft.Container(width=NAME_W, height=HEADER_H,
+                     content=ft.Text("任务", color=TEXT_BRIGHT, size=FS_MD),
+                     alignment=ft.Alignment(-1.0, 0.0)),
+        ft.Container(height=1, bgcolor=BORDER_SOFT),
+        ft.Column(names, spacing=0),
+    ], spacing=0)
+
+    return ft.Row([
+        frozen_names,
+        # Row 的 scroll 为横向：时间轨道可左右滚动，名列保持冻结
+        ft.Row([timeline], scroll=ft.ScrollMode.AUTO, expand=True, spacing=0),
+    ], spacing=0, expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
 

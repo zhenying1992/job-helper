@@ -4,27 +4,27 @@ from collections.abc import Callable
 import flet as ft
 from flet.controls.base_control import skip_field
 
-from constant import COLOR_TEXT, Status, COLOR_PRIMARY, COLOR_DANGER
+from common.util import as_naive
+from constant import COLOR_TEXT, Status, COLOR_PRIMARY
 from data.model import Task
 from data.service import TaskService
-from theme import FS_SM, BTN_TEXT, BG_PANEL, RADIUS_LG, FS_BASE, MUTED
-
-# 弹窗内表单列宽：两列各占一半，避免默认宽度撑破弹窗导致错位/溢出
-_FORM_W = 460
-_COL_W = 215
-
-
-def _required_label(text: str) -> ft.Row:
-    """必填字段标签：文字 + 红色 *。"""
-    return ft.Row([
-        ft.Text(text, size=FS_BASE, color=MUTED),
-        ft.Text("*", size=FS_BASE, color=COLOR_DANGER, weight=ft.FontWeight.BOLD),
-    ], spacing=2)
+from theme import (
+    ACCENT, ACCENT_SOFT, BG_INPUT, BORDER_STRONG, BG_PANEL, FS_BASE, FS_SM, RADIUS_LG,
+    # 与新建工作弹窗共用的暗色科技感表单样式
+    form_field, form_option, required_label as _required_label,
+    primary_button, FORM_COL_W as _COL_W, FORM_FULL_W as _FORM_W,
+    FORM_GAP,
+)
 
 
 def _valid_range(start_picker, end_picker) -> bool:
-    """校验日期齐全且结束不早于开始；不合法时弹提示返回 False。"""
-    s, e = start_picker.value, end_picker.value
+    """校验日期齐全且结束不早于开始；不合法时弹提示返回 False。
+
+    DatePicker 选出的值是带 UTC tzinfo 的 aware datetime，而表单初始值是 naive。
+    只改了其中一个日期时 e < s 会抛 "can't compare offset-naive and offset-aware
+    datetimes"，表现为点击确定后"偶尔闪退"。比较前统一归一到东八区 naive。
+    """
+    s, e = as_naive(start_picker.value), as_naive(end_picker.value)
     if not s or not e:
         ft.context.page.show_dialog(ft.SnackBar(ft.Text("请选择开始和结束日期")))
         return False
@@ -34,16 +34,49 @@ def _valid_range(start_picker, end_picker) -> bool:
     return True
 
 
-def _date_picker(value, label: str) -> ft.DatePicker:
-    """带文本框 + 日历图标的日期选择器，比隐藏日期的按钮直观。"""
-    return ft.DatePicker(
-        value=value,
-        entry_mode=ft.DatePickerEntryMode.INPUT,
+def _date_picker(value, label: str) -> tuple[ft.Button, ft.DatePicker]:
+    """日期选择按钮 + 日历弹窗（暗色科技感 / 默认日历模式）。
+
+    DatePicker 是对话框控件，只能由 page.show_dialog() 打开，直接放进布局
+    不会显示——这正是任务弹窗看不到时间选项的原因。这里用按钮承载当前日期，
+    点击弹日历，选中后回填按钮文本；返回 (按钮, 日历) 供表单提交时读值。
+    """
+    def fmt(dt):
+        return dt.strftime('%Y-%m-%d') if dt else '选择日期'
+
+    picker = ft.DatePicker(
+        value=as_naive(value),
+        entry_mode=ft.DatePickerEntryMode.CALENDAR,  # 默认日历模式，不进输入框
         field_label_text=label,
         locale=ft.Locale("zh", "Hans"),
         first_date=datetime.datetime(2000, 1, 1),
         last_date=datetime.datetime(2100, 12, 31),
     )
+    caption = ft.Text(fmt(picker.value), color=ACCENT_SOFT, size=FS_BASE)
+    button = ft.Button(
+        content=ft.Row([
+            ft.Icon(ft.Icons.CALENDAR_MONTH, size=16, color=ACCENT), caption,
+        ], spacing=6),
+        width=_COL_W,
+        bgcolor=BG_INPUT,
+        color=ACCENT_SOFT,
+        style=ft.ButtonStyle(side=ft.BorderSide(1, BORDER_STRONG)),
+        on_click=lambda e: ft.context.page.show_dialog(picker),
+    )
+
+    def on_change(e):
+        # 选中值当场归一为 naive，避免 aware 值流到比较/入库链路
+        picked = as_naive(e.control.value)
+        picker.value = picked  # 保持选中值，供提交时读取
+        caption.value = fmt(picked)
+        try:
+            caption.update()
+        except Exception:
+            # 对话框正在收起时按钮可能已卸载，刷新失败不影响取值
+            pass
+
+    picker.on_change = on_change
+    return button, picker
 
 
 def _build_form(dlg, task=None):
@@ -57,35 +90,36 @@ def _build_form(dlg, task=None):
     end = task.end_time if is_update else datetime.datetime.combine(
         today + datetime.timedelta(days=7), datetime.time())
 
-    dlg.name_field = ft.TextField(
-        label=_required_label("任务名称"), color=COLOR_TEXT, width=_COL_W,
+    # 与新建工作弹窗共用同一套暗色科技感表单控件
+    dlg.name_field = form_field(
+        ft.TextField, label=_required_label("任务名称"), width=_COL_W,
         value=task.name if is_update else "",
     )
-    dlg.desc_field = ft.TextField(
-        label="描述", color=COLOR_TEXT, multiline=True, max_lines=3, width=_FORM_W - 10,
+    dlg.desc_field = form_field(
+        ft.TextField, label="描述", multiline=True, max_lines=3, width=_FORM_W,
         value=task.description if is_update else "",
     )
-    dlg.status_field = ft.Dropdown(
-        label=_required_label("状态"), color=COLOR_TEXT, width=_COL_W,
-        options=[ft.DropdownOption(key=i, text=i) for i in Status.list()],
+    dlg.status_field = form_field(
+        ft.Dropdown, label=_required_label("状态"), width=_COL_W,
+        options=[form_option(i) for i in Status.list()],
         value=Status.normalize(task.status) if is_update else Status.NOT_START,
     )
-    dlg.assignee_field = ft.TextField(
-        label="负责人", color=COLOR_TEXT, width=_COL_W,
+    dlg.assignee_field = form_field(
+        ft.TextField, label="负责人", width=_COL_W,
         value=task.assignee if is_update else "",
     )
-    dlg.tags_field = ft.TextField(
-        label="标签（逗号分隔）", color=COLOR_TEXT, width=_FORM_W - 10,
+    dlg.tags_field = form_field(
+        ft.TextField, label="标签（逗号分隔）", width=_FORM_W,
         value=', '.join(task.tags) if is_update else "",
     )
-    dlg.hours_field = ft.TextField(
-        label="预估工时（小时）", color=COLOR_TEXT, width=_COL_W,
+    dlg.hours_field = form_field(
+        ft.TextField, label="预估工时（小时）", width=_COL_W,
         keyboard_type=ft.KeyboardType.NUMBER,
         value=str(task.estimate_hours or '') if is_update else '',
     )
-    # 两个独立日期选择器：各自显示已选日期，点击弹日历/可直接输入，比单一"选择时间"按钮直观
-    dlg.start_picker = _date_picker(start, "开始日期")
-    dlg.end_picker = _date_picker(end, "结束日期")
+    # 两个独立日期选择器：按钮显示已选日期，点击弹日历选择
+    start_button, dlg.start_picker = _date_picker(start, "开始日期")
+    end_button, dlg.end_picker = _date_picker(end, "结束日期")
 
     # 两列紧凑布局：一眼看全，避免底部大片空白；字段定宽避免溢出弹窗
     return ft.Container(
@@ -95,7 +129,8 @@ def _build_form(dlg, task=None):
             ft.Row([dlg.assignee_field, dlg.hours_field], spacing=10),
             dlg.tags_field,
             dlg.desc_field,
-            ft.Row([dlg.start_picker, dlg.end_picker], spacing=10),
+            # 日期选择器放表单最后一行
+            ft.Row([start_button, end_button], spacing=10),
         ], spacing=8, tight=True),
     )
 
@@ -122,13 +157,9 @@ class CreateTaskDialog(ft.AlertDialog):
         self.content = _build_form(self)
         self.actions = [
             ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
-            ft.Button(
-                content="确定",
-                bgcolor=COLOR_PRIMARY,
-                color=BTN_TEXT,
-                on_click=self.submit,
-            ),
+            primary_button("确定", self.submit),
         ]
+        self.actions_padding = ft.Padding(0, 0, FORM_GAP, 12)
 
     def submit(self, e):
         if not (self.name_field.value or '').strip():
@@ -184,13 +215,9 @@ class UpdateTaskDialog(ft.AlertDialog):
         self.content = _build_form(self, self.task)
         self.actions = [
             ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
-            ft.Button(
-                content="确定",
-                bgcolor=COLOR_PRIMARY,
-                color=BTN_TEXT,
-                on_click=self.submit,
-            ),
+            primary_button("确定", self.submit),
         ]
+        self.actions_padding = ft.Padding(0, 0, FORM_GAP, 12)
 
     def submit(self, e):
         if not (self.name_field.value or '').strip():
@@ -241,13 +268,9 @@ class DropTaskDialog(ft.AlertDialog):
 
         self.actions = [
             ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
-            ft.Button(
-                content="确定",
-                bgcolor=COLOR_PRIMARY,
-                color=BTN_TEXT,
-                on_click=self.submit,
-            ),
+            primary_button("确定", self.submit),
         ]
+        self.actions_padding = ft.Padding(0, 0, FORM_GAP, 12)
 
     def submit(self, e):
         try:

@@ -1,4 +1,3 @@
-import datetime
 from typing import Callable
 
 import flet as ft
@@ -6,15 +5,17 @@ from flet import MainAxisAlignment
 
 from common.decorate import catch_error
 from common.pagination import Pagination
-from common.util import utc_2_naive_datetime, datetime_2_date_str
+from common.util import datetime_2_date_str
 from constant import Status, Priority, JobType
 from data.model import Job
 from data.service import JobService, PluginService
 from theme import (
-    BG_SEARCH, BG_INPUT, BG_DIALOG, BG_TABLE, BG_TABLE_HEAD, BTN_ADD,
-    ACCENT_BRIGHT, TEXT_BRIGHT, TEXT_TITLE, TEXT, MUTED, TEXT_ON_DARK, BTN_TEXT, SLATE,
-    RADIUS_LG, TABLE_RADIUS,
-    FS_BASE, FS_MD, FS_XXL,
+    BG_SEARCH, BG_DIALOG, BG_TABLE, BG_TABLE_HEAD, BTN_ADD,
+    ACCENT_BRIGHT, TEXT_ON_DARK, TEXT_TITLE, TEXT, BTN_TEXT, MUTED, SLATE,
+    RADIUS_LG, TABLE_RADIUS, FS_BASE, FS_MD, FS_XXL,
+    # 与任务弹窗共用的暗色科技感表单样式
+    form_field, form_option, required_label as _required_label,
+    primary_button, FORM_COL_W, FORM_GAP, FORM_FULL_W,
 )
 
 
@@ -121,47 +122,22 @@ def JobsView(current: int, set_current: Callable, page_size: int,
         plugins = PluginService.list()
         job_types = [JobType.COMMON] + [plugin.name for plugin in plugins]
 
-        # 表单控件共享同一套暗色输入框样式
-        def field(kind, **kwargs):
-            common = dict(
-                border_color=ACCENT_BRIGHT,
-                focused_border_color=ACCENT_BRIGHT,
-                bgcolor=BG_INPUT,
-                color=TEXT_BRIGHT,
-                label_style=ft.TextStyle(color=MUTED),
-            )
-            common.update(kwargs)
-            return kind(**common)
-
-        job_name = field(
-            ft.TextField, label="工作名", hint_text="请输入工作名称",
-            max_length=20,
+        # 与任务弹窗共用同一套暗色科技感表单控件
+        job_name = form_field(
+            ft.TextField, label=_required_label("工作名"), hint_text="请输入工作名称",
+            max_length=20, width=FORM_FULL_W,
         )
-        job_desc = field(
+        job_desc = form_field(
             ft.TextField, label="描述", hint_text="非必填，填写任务说明",
-            multiline=True, min_lines=2,
+            multiline=True, min_lines=2, width=FORM_FULL_W,
         )
-        job_type = field(
-            ft.Dropdown, label="类型", value=JobType.COMMON,
-            options=[ft.DropdownOption(key=i, text=i) for i in job_types],
+        job_type = form_field(
+            ft.Dropdown, label=_required_label("类型"), value=JobType.COMMON,
+            width=FORM_COL_W, options=[form_option(i) for i in job_types],
         )
-        job_priority = field(
-            ft.Dropdown, label="优先级", value=Priority.LOW,
-            options=[ft.DropdownOption(key=i, text=i) for i in Priority.list()],
-        )
-        today = datetime.date.today()
-        today_7 = datetime.date.today() + datetime.timedelta(days=7)
-        picker = ft.DateRangePicker(
-            locale=ft.Locale("zh", "Hans"),
-            start_value=datetime.datetime(year=today.year, month=today.month, day=today.day),
-            end_value=datetime.datetime(year=today_7.year, month=today_7.month, day=today_7.day),
-            current_date=today,
-        )
-
-        picker_button = ft.Button(
-            icon=ft.Icons.CALENDAR_MONTH,
-            content="选择时间",
-            on_click=lambda _: ft.context.page.show_dialog(picker)
+        job_priority = form_field(
+            ft.Dropdown, label=_required_label("优先级"), value=Priority.LOW,
+            width=FORM_COL_W, options=[form_option(i) for i in Priority.list()],
         )
 
         def submit_job(e):
@@ -174,13 +150,12 @@ def JobsView(current: int, set_current: Callable, page_size: int,
                     ft.SnackBar(ft.Text("名称已存在；若已删除，请先到回收站彻底删除"))
                 )
                 return
+            # 起止时间由任务自动汇总，新建时无需录入
             JobService.create(
                 name=name,
                 description=job_desc.value,
                 type=job_type.value,
                 priority=job_priority.value,
-                start_time=utc_2_naive_datetime(picker.start_value),
-                end_time=utc_2_naive_datetime(picker.end_value),
             )
             ft.context.page.pop_dialog()
             set_refresh_flag(lambda v: not v)
@@ -188,25 +163,22 @@ def JobsView(current: int, set_current: Callable, page_size: int,
         dialog = ft.AlertDialog(
             title=ft.Text("新建工作", size=FS_XXL, color=TEXT_TITLE, weight=ft.FontWeight.BOLD),
             bgcolor=BG_DIALOG,
+            # 表单宽度与字段宽度一致（不再固定 520 导致右侧空一片），
+            # 按钮经 actions 放在表单下方右侧，与任务编辑弹窗同一紧凑布局。
             content=ft.Container(
-                width=520,
-                content=ft.Column(
-                    [
-                        job_name,
-                        job_desc,
-                        job_type,
-                        job_priority,
-                        picker_button,
-                    ],
-                    tight=True,
-                    spacing=16
-                ),
+                width=FORM_FULL_W,
+                content=ft.Column([
+                    job_name,
+                    job_desc,
+                    ft.Row([job_type, job_priority], spacing=FORM_GAP),
+                ], tight=True, spacing=16),
             ),
             actions=[
-                ft.TextButton("取消", on_click=lambda e: setattr(dialog, "open", False) or ft.context.page.update()),
-                ft.Button("确认创建", on_click=submit_job, bgcolor=ACCENT_BRIGHT, color=TEXT_ON_DARK),
+                ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
+                primary_button("确认创建", submit_job),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
+            actions_padding=ft.Padding(0, 0, FORM_GAP, 12),
         )
         ft.context.page.show_dialog(dialog=dialog)
 
@@ -266,6 +238,9 @@ def JobsView(current: int, set_current: Callable, page_size: int,
         )
 
     def list_row():
+        # 一次批量聚合所有行的时间范围，避免逐行查询
+        time_ranges = JobService.time_ranges([j.id for j in pagination.data])
+
         def view_handler(job_id):
             """单参数闭包：Flet 事件只回传一个事件对象，job_id 由闭包捕获。"""
             def _go(_e):
@@ -297,12 +272,12 @@ def JobsView(current: int, set_current: Callable, page_size: int,
                     )
                 ),
                 ft.DataCell(ft.Text(f'{_job.progress}%', color=TEXT, width=65, text_align=ft.TextAlign.CENTER)),
-                ft.DataCell(
-                    ft.Text(datetime_2_date_str(_job.start_time), color=TEXT, width=110, text_align=ft.TextAlign.CENTER)
-                ),
-                ft.DataCell(
-                    ft.Text(datetime_2_date_str(_job.end_time), text_align=ft.TextAlign.CENTER, color=TEXT, width=110)
-                ),
+                ft.DataCell(ft.Text(
+                    datetime_2_date_str(time_ranges[_job.id][0]) if time_ranges[_job.id][0] else "-",
+                    color=TEXT, width=110, text_align=ft.TextAlign.CENTER)),
+                ft.DataCell(ft.Text(
+                    datetime_2_date_str(time_ranges[_job.id][1]) if time_ranges[_job.id][1] else "-",
+                    color=TEXT, width=110, text_align=ft.TextAlign.CENTER)),
                 ft.DataCell(ft.Row([
                     ft.TextButton("查看", on_click=view_handler(_job.id)),
                     ft.TextButton("删除", on_click=drop_handler(_job)),

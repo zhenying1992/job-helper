@@ -6,22 +6,15 @@
   <component name="ChangeListManager">
     <list default="true" id="69b2bc32-b187-4f45-852c-ae2a20848758" name="更改" comment="更改">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/common/pagination.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/pagination.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/constant.py" beforeDir="false" afterPath="$PROJECT_DIR$/constant.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/db.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/data/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/common/util.py" beforeDir="false" afterPath="$PROJECT_DIR$/common/util.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/data/service.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/audit.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/audit.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/calendar.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/calendar.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/job.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/job.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/jobs.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/jobs.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/overview.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/overview.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/setting.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/setting.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/task/board.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/task/board.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/task/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/task/__init__.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/task/gantt.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/task/gantt.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/pages/task/list.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/task/list.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pages/task/topo.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/task/topo.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_main.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tests/test_render.py" beforeDir="false" afterPath="$PROJECT_DIR$/tests/test_render.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/theme.py" beforeDir="false" afterPath="$PROJECT_DIR$/theme.py" afterDir="false" />

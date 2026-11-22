@@ -26,7 +26,7 @@ from flet.controls import context as ctx  # noqa: E402
 
 from constant import DEFAULT_TREND_DAYS, TREND_RANGES  # noqa: E402
 
-from data.service import JobService, LogService  # noqa: E402
+from data.service import JobService, LogService, TaskService  # noqa: E402
 from pages.urls import get_urls  # noqa: E402
 from pages import audit as audit_page  # noqa: E402
 from pages import overview as ov  # noqa: E402
@@ -244,6 +244,205 @@ class TestAuditUi(unittest.TestCase):
         self.assertEqual(items[0].content, "查看审计台账")
 
 
+class TestStyleAlignmentUi(unittest.TestCase):
+    """本轮样式调整：状态语义色、轴标题间距、必填红星、下拉亮字。"""
+
+    def test_expire_status_uses_semantic_color(self):
+        """即将逾期表格的状态列与工作列表一致，用 Status.color。"""
+        job = JobService.create(f"逾期色-{datetime.now().timestamp()}", "通用工作")
+        JobService.update(job.id, status="执行中")
+        row = ov._expire_job(JobService.get(job.id))
+        cells = []
+        walk_controls(row, lambda n: isinstance(n, ft.Text), cells)
+        status_texts = [c for c in cells if c.value == "执行中"]
+        self.assertEqual(len(status_texts), 1)
+        from constant import Status
+        self.assertEqual(status_texts[0].color, Status.color("执行中"))
+
+    def test_chart_title_size_leaves_gap(self):
+        ctx._context_page.set(_FakePage("/overview"))
+        with Renderer().with_context():
+            root = Renderer().render(ov.overview)
+        charts = []
+        walk_controls(root, lambda n: isinstance(n, LineChart), charts)
+        self.assertGreater(charts[0].left_axis.title_size, 11)
+
+    def test_job_detail_status_is_plain_text(self):
+        """工作详情状态：纯文字语义色，不再是带底色的徽章。"""
+        from pages.job import JobDetails
+        job = JobService.create(f"详情状态-{datetime.now().timestamp()}", "通用工作",
+                                status="执行中")
+        ctx._context_page.set(_FakePage(f"/job/{job.id}"))
+        with Renderer().with_context():
+            body = Renderer().render(JobDetails, job)
+        texts = []
+        walk_controls(body, lambda n: isinstance(n, ft.Text) and n.value == "执行中", texts)
+        self.assertTrue(texts)
+        from constant import Status
+        self.assertEqual(texts[0].color, Status.color("执行中"))
+
+    def test_new_job_form_helpers(self):
+        """必选项红星与下拉亮字由公共辅助生成（两个弹窗共用）。"""
+        from theme import DANGER, TEXT_BRIGHT, form_option, required_label
+        label = required_label("工作名")
+        self.assertEqual([s.text for s in label.spans], ["工作名", " *"])
+        self.assertEqual(label.spans[1].style.color, DANGER)
+        option = form_option("高")
+        self.assertEqual(option.key, "高")
+        self.assertEqual(option.content.color, TEXT_BRIGHT)
+
+
+class TestTaskUi(unittest.TestCase):
+    """任务列表/弹窗：操作列可见、日期暗色末行、混合时区不闪退。"""
+
+    @staticmethod
+    def _walk(node, depth=0, seen=None, out=None):
+        if seen is None:
+            seen = set()
+        if out is None:
+            out = []
+        if depth > 14:
+            return out
+        if isinstance(node, Component):
+            if id(node) in seen:
+                return out
+            seen.add(id(node))
+            TestTaskUi._walk(Renderer(node).render(node.fn, *node.args, **node.kwargs),
+                             depth + 1, seen, out)
+            return out
+        out.append(node)
+        for attr in ("controls", "content", "actions", "cells"):
+            v = getattr(node, attr, None)
+            if v is None:
+                continue
+            for it in (v if isinstance(v, (list, tuple)) else [v]):
+                if isinstance(it, (ft.Control, Component)):
+                    TestTaskUi._walk(it, depth + 1, seen, out)
+        return out
+
+    def _job(self):
+        job = JobService.create(f"任务UI-{datetime.now().timestamp()}", "通用工作")
+        TaskService.create(job.id, "任务A", status="未开始")
+        ctx._context_page.set(_FakePage(f"/job/{job.id}"))
+        return job
+
+    def test_task_table_keeps_operation_column(self):
+        """固定列宽+默认列间距曾把末列挤出面板，编辑/删除按钮消失。"""
+        job = self._job()
+        from pages.task.list import task_list_view
+        with Renderer().with_context():
+            comp = task_list_view(job=job)
+            body = Renderer(comp).render(comp.fn, *comp.args, **comp.kwargs)
+            nodes = self._walk(body)
+        table = next(n for n in nodes if isinstance(n, ft.DataTable) and n.columns)
+        self.assertEqual([c.label.value for c in table.columns][-1], "操作")
+        self.assertEqual(len(table.columns), 9)
+        self.assertEqual(table.column_spacing, 10)
+        ops = table.rows[0].cells[-1].content
+        self.assertEqual(len([n for n in self._walk(ops)
+                              if isinstance(n, ft.TextButton)]), 2)
+
+    def test_date_picker_dark_and_last_row(self):
+        """日期选择器改暗色科技感、默认日历模式，并置于表单末行。"""
+        job = self._job()
+        from pages.task import CreateTaskDialog
+        from theme import BG_INPUT, ACCENT_SOFT
+        dlg = CreateTaskDialog(job_id=job.id, on_saved=None)
+        dlg.init()
+        self.assertEqual(dlg.start_picker.entry_mode, ft.DatePickerEntryMode.CALENDAR)
+        dark = [n for n in self._walk(dlg.content)
+                if isinstance(n, ft.Button) and n.bgcolor == BG_INPUT]
+        self.assertEqual(len(dark), 2)
+        self.assertEqual(dark[0].color, ACCENT_SOFT)
+        cols = dlg.content.content.controls
+        self.assertIsInstance(cols[-1], ft.Row)
+        self.assertEqual(len(cols[-1].controls), 2)
+
+    def test_forms_share_dark_theme_and_aligned_widths(self):
+        """新建工作/任务两弹窗共用暗色科技感样式，标签描述与两列等宽。"""
+        from theme import (BG_INPUT, ACCENT_BRIGHT, TEXT_BRIGHT,
+                           FORM_FULL_W, FORM_COL_W, FORM_GAP)
+        job = self._job()
+        from pages.task import CreateTaskDialog
+
+        dlg = CreateTaskDialog(job_id=job.id, on_saved=None)
+        dlg.init()
+        fields = [dlg.name_field, dlg.status_field, dlg.assignee_field,
+                  dlg.hours_field, dlg.tags_field, dlg.desc_field]
+        # 所有字段统一暗色底/青描边/亮字
+        for fld in fields:
+            self.assertEqual(fld.bgcolor, BG_INPUT)
+            self.assertEqual(fld.border_color, ACCENT_BRIGHT)
+            self.assertEqual(fld.color, TEXT_BRIGHT)
+        # 标签/描述全宽 == 两列合计，右侧不再多出一截
+        self.assertEqual(FORM_FULL_W, FORM_COL_W * 2 + FORM_GAP)
+        self.assertEqual(dlg.desc_field.width, FORM_FULL_W)
+        self.assertEqual(dlg.tags_field.width, dlg.desc_field.width)
+        self.assertEqual(dlg.name_field.width * 2 + FORM_GAP, FORM_FULL_W)
+        # 下拉选项亮字
+        self.assertTrue(all(o.content.color == TEXT_BRIGHT
+                            for o in dlg.status_field.options))
+
+    def test_valid_range_mixed_timezone(self):
+        """日历选出的 aware 与表单初始 naive 混合比较不得抛异常闪退。"""
+        from datetime import timezone
+        from pages.task import _valid_range
+
+        class P:
+            def __init__(self, v):
+                self.value = v
+
+        aware = datetime(2026, 11, 22, tzinfo=timezone.utc)
+        naive = datetime(2026, 11, 23)
+        late = datetime(2026, 11, 25, tzinfo=timezone.utc)
+        self.assertTrue(_valid_range(P(aware), P(naive)))
+        self.assertTrue(_valid_range(P(naive), P(late)))
+        self.assertFalse(_valid_range(P(late), P(naive)))
+
+
+class TestSettingUi(unittest.TestCase):
+    """配置中心：两侧顶部对齐、插件空态、按文件恢复。"""
+
+    def _setting_root(self):
+        from pages import setting
+        ctx._context_page.set(_FakePage("/setting"))
+        with Renderer().with_context():
+            comp = setting.setting_view()
+            return Renderer(comp).render(comp.fn, *comp.args, **comp.kwargs)
+
+    def test_menu_and_body_top_aligned(self):
+        root = self._setting_root()
+        self.assertEqual(root.vertical_alignment, ft.CrossAxisAlignment.START)
+        for child in root.controls:
+            with Renderer().with_context():
+                body = Renderer(child).render(child.fn, *child.args, **child.kwargs)
+            self.assertEqual(body.padding, 10)
+
+    def test_plugin_empty_state(self):
+        from pages import setting
+        from data.service import PluginService
+        for p in PluginService().list():
+            PluginService().delete(p.id)
+        ctx._context_page.set(_FakePage("/setting"))
+        with Renderer().with_context():
+            comp = setting.PluginContent()
+            body = Renderer(comp).render(comp.fn, *comp.args, **comp.kwargs)
+        texts = []
+        walk_controls(body, lambda n: isinstance(n, ft.Text) and bool(n.value), texts)
+        self.assertIn("拖入 .py 插件安装", [t.value for t in texts])
+        tables = []
+        walk_controls(body, lambda n: isinstance(n, ft.DataTable), tables)
+        self.assertEqual(tables, [], "无插件时不应渲染空表头")
+
+    def test_restore_uses_file_picker(self):
+        import inspect
+        from pages import setting
+        # do_restore 是 DataContent 内的闭包，源码层面确认其走 FilePicker 选择
+        source = inspect.getsource(setting)
+        self.assertIn("pick_files(", source)
+        self.assertIn("allowed_extensions=[\"db\"]", source)
+
+
 class TestProgressChartRender(unittest.TestCase):
     """工作进展折线图最终渲染结果：纵轴整数刻度、三按钮、默认 7 天。"""
 
@@ -290,6 +489,23 @@ class TestRenderSmoke(unittest.TestCase):
             JobService.update(job.id, status=status)
             with self.subTest(status=status):
                 self.assertEqual(render_route_errors(f"/job/{job.id}"), [])
+
+    def test_job_detail_render_with_aware_task_time(self):
+        """历史 aware 时间的任务不得让详情页渲染崩溃（点开即卡死回归）。
+
+        job_view 在 use_state 前调用 sync_progress→time_range 聚合工作时间；
+        若 min/max 混合 aware/naive 抛 TypeError，异常被 catch_error 吞掉会
+        破坏 Flet hook 栈，表现为点开任务列表卡死且无可见报错。
+        """
+        from datetime import timezone
+        from data.model import Task
+        job = JobService.create(f"时区渲染-{datetime.now().timestamp()}", "通用工作")
+        t = TaskService.create(job.id, "脏时间任务")
+        Task.update(
+            start_time=datetime(2026, 5, 1, 8, tzinfo=timezone.utc),
+            end_time=datetime(2026, 5, 2, 8, tzinfo=timezone.utc),
+        ).where(Task.id == t.id).execute()
+        self.assertEqual(render_route_errors(f"/job/{job.id}"), [])
 
     def test_pie_hover_state(self):
         """饼图 hover 纯状态：默认状态名，悬浮显示数量/占比，越界还原。"""

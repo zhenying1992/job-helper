@@ -278,6 +278,63 @@ class TestJobStatusDerivation(unittest.TestCase):
         self.assertEqual(JobService.get(job.id).status, Status.NOT_START)
 
 
+class TestJobTimeRange(unittest.TestCase):
+    """工作起止时间由任务聚合：最早开始、最晚结束；无任务显示缺省。"""
+
+    def test_empty_job_has_no_time(self):
+        job = JobService.create(f"无任务-{datetime.now().timestamp()}", '通用工作')
+        self.assertEqual(JobService.time_range(job.id), (None, None))
+
+    def test_range_follows_tasks_and_soft_delete(self):
+        job = JobService.create(f"时间联动-{datetime.now().timestamp()}", '通用工作')
+        TaskService.create(
+            job.id, 'A',
+            start_time=datetime(2026, 3, 1), end_time=datetime(2026, 3, 5))
+        t2 = TaskService.create(
+            job.id, 'B',
+            start_time=datetime(2026, 2, 1), end_time=datetime(2026, 4, 1))
+        start, end = JobService.time_range(job.id)
+        self.assertEqual((start, end), (datetime(2026, 2, 1), datetime(2026, 4, 1)))
+
+        TaskService.delete(t2.id)
+        self.assertEqual(JobService.time_range(job.id),
+                         (datetime(2026, 3, 1), datetime(2026, 3, 5)))
+
+    def test_aware_datetime_is_normalized(self):
+        """DatePicker 返回带 UTC tzinfo 的 aware 时间，入库时须归一为 naive。
+
+        回归：曾因 aware/naive 混合比较抛 TypeError，导致 job_view 渲染期
+        sync_progress 崩溃、hook 栈错乱，点开该工作详情页即卡死。
+        """
+        from datetime import timezone
+        utc = timezone.utc
+        job = JobService.create(f"时区归一-{datetime.now().timestamp()}", '通用工作')
+        TaskService.create(
+            job.id, 'AWARE',
+            start_time=datetime(2026, 3, 1, 16, tzinfo=utc),
+            end_time=datetime(2026, 3, 5, 16, tzinfo=utc))
+        saved = TaskService.query(job.id)[0]
+        self.assertIsNone(saved.start_time.tzinfo, "入库时间必须是 naive")
+        self.assertEqual(saved.start_time, datetime(2026, 3, 2, 0))  # UTC+8
+        # 聚合比较不再抛异常，且返回 naive
+        start, end = JobService.time_range(job.id)
+        self.assertIsNone(start.tzinfo)
+        self.assertIsNone(end.tzinfo)
+
+    def test_legacy_aware_row_does_not_break_aggregation(self):
+        """历史脏数据（库里残留的 aware 时间）也不能让聚合崩溃。"""
+        from datetime import timezone
+        job = JobService.create(f"脏数据-{datetime.now().timestamp()}", '通用工作')
+        t = TaskService.create(job.id, 'LEGACY')
+        # 绕过 Service，直接模拟旧库把 aware 时间写进去
+        Task.update(
+            start_time=datetime(2026, 5, 1, 8, tzinfo=timezone.utc),
+            end_time=datetime(2026, 5, 2, 8, tzinfo=timezone.utc),
+        ).where(Task.id == t.id).execute()
+        start, end = JobService.time_range(job.id)  # 不应抛 TypeError
+        self.assertIsNone(start.tzinfo)
+
+
 class TestBackupInfo(unittest.TestCase):
     def test_parse_named_backup(self):
         from data.service import BackupService

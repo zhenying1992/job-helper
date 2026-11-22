@@ -309,7 +309,8 @@ def ProgressChart():
             show_labels=True,
             label_spacing=y_step,
             label_size=_y_label_size(max_y),
-            title=ft.Text("数量", size=FS_SM, color=MUTED), title_size=FS_SM,
+            # 标题盒宽：比字号多留一截，让「数量」与刻度数字之间不贴在一起
+            title=ft.Text("数量", size=FS_SM, color=MUTED), title_size=FS_XL + 8,
         ),
         bottom_axis=ChartAxis(
             labels=_x_labels(job_trend, x_step),
@@ -450,7 +451,8 @@ def _expire_job(job: Job) -> ft.Control:
         ft.Text(job.end_time.strftime("%Y-%m-%d"), size=FS_MD, color=COLOR_TEXT,
                 text_align=TextAlign.CENTER, expand=2),
         ft.Text(text, size=FS_MD, color=color, text_align=TextAlign.CENTER, expand=2),
-        ft.Text(job.status, size=FS_MD, color=COLOR_TEXT, text_align=TextAlign.CENTER, expand=2),
+        ft.Text(Status.normalize(job.status), size=FS_MD, color=Status.color(job.status),
+                text_align=TextAlign.CENTER, expand=2),
         ft.Icon(ft.Icons.WARNING_AMBER, size=FS_BASE, color=COLOR_WARN,
                 width=EXPIRE_ICON_W) if day < 3 else ft.Container(width=EXPIRE_ICON_W),
     ], spacing=8)

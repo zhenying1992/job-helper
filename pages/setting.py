@@ -11,7 +11,7 @@ from flet import MainAxisAlignment
 
 from common.decorate import catch_error
 from common.util import datetime_2_date_str
-from config import get_db_path, get_plugin_path, get_work_dir
+from config import get_backup_path, get_db_path, get_plugin_path, get_work_dir
 from constant import DATE_TIME_FMT
 from data.service import (
     BackupService, JobService, PluginService, TaskService,
@@ -41,7 +41,7 @@ def setting_view():
     return ft.Row([
         SettingMenu(selected_key, set_selected_key),
         SettingBody(selected_key),
-    ], expand=True)
+    ], expand=True, vertical_alignment=ft.CrossAxisAlignment.START)
 
 
 @ft.component
@@ -83,7 +83,8 @@ def _content_for(key: str):
 @ft.component
 def SettingBody(selected_key):
     """右侧内容区：按 key 切换，新增页面只需在 _content_for 登记。"""
-    return ft.Container(_content_for(selected_key)(), expand=True)
+    # 与左侧菜单相同的 10px 内边距，保证两边内容顶部严格对齐
+    return ft.Container(_content_for(selected_key)(), expand=True, padding=10)
 
 
 def _section(title: str, desc: str = '') -> list[ft.Control]:
@@ -207,16 +208,24 @@ def PluginContent():
         ])
         for p in plugins
     ]
+    # 有数据才渲染表格；空态与工作详情附件区一致（图标 + 提示），避免露出光秃秃的表头
     table = ft.DataTable(
         columns=columns, rows=rows, expand=True,
         border_radius=RADIUS_MD, bgcolor=BG_TABLE, heading_row_color=BG_TABLE_HEAD,
         column_spacing=12,
+    ) if plugins else ft.Container(
+        content=ft.Column([
+            ft.Icon(ft.Icons.EXTENSION, size=28, color=MUTED),
+            ft.Text("拖入 .py 插件安装", color=MUTED, size=FS_MD),
+        ], alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER, expand=True),
+        alignment=ft.Alignment.CENTER, height=90,
     )
 
     return ft.Column([
         *_section("插件管理", "拖入 .py 插件安装；插件会在对应类型的工作详情页加载为独立视图"),
         ftd.Dropzone(
-            content=table,
+            content=ft.Container(content=table, expand=True),
             expand=True,
             on_dropped=lambda e: add_plugins(e.files),
         ),
@@ -265,17 +274,23 @@ def DataContent():
             ],
         ))
 
-    def do_restore(e):
+    async def do_restore(e):
+        # 由用户挑选具体的备份文件，而不是固定恢复最近一份
+        files = await ft.FilePicker().pick_files(
+            dialog_title="选择备份文件",
+            initial_directory=str(get_backup_path()),
+            file_type=ft.FilePickerFileType.CUSTOM,
+            allowed_extensions=["db"],
+        )
+        if not files:
+            return
+        target = Path(files[0].path)
+
         def confirm(_):
             try:
-                targets = BackupService.list_backups()
-                if not targets:
-                    ft.context.page.pop_dialog()
-                    _banner("暂无备份文件")
-                    return
-                BackupService.restore(targets[0])
+                BackupService.restore(target)
                 ft.context.page.pop_dialog()
-                _banner(f"已从 {targets[0].name} 恢复，请重启应用", error=False)
+                _banner(f"已从 {target.name} 恢复，请重启应用", error=False)
             except Exception as ex:
                 logger.exception("恢复失败")
                 ft.context.page.pop_dialog()
@@ -284,7 +299,7 @@ def DataContent():
         ft.context.page.show_dialog(ft.AlertDialog(
             title=ft.Text("从备份恢复", color=ACCENT),
             bgcolor=BG_PANEL,
-            content=ft.Text("将用最近一次备份覆盖当前数据，当前未备份的改动会丢失。确定继续？",
+            content=ft.Text(f"将用 {target.name} 覆盖当前数据，当前未备份的改动会丢失。确定继续？",
                             color=TEXT),
             actions=[
                 ft.TextButton("取消", on_click=lambda e: ft.context.page.pop_dialog()),
