@@ -6,12 +6,12 @@ from typing import Optional
 
 from common.pagination import Pagination
 from common.util import datetime_2_date_str, cal_position, as_naive
-from config import get_attachment_path, get_backup_path
+from config import get_attachment_path, get_backup_path, load_app_config, save_app_config
 from constant import (
     DEFAULT_JOB_END_DAY, TREND_DAY, Priority, Status,
 )
 from data.db import db
-from data.model import Job, Task, Log, Plugin, Position
+from data.model import Job, Task, Log, DailyReport, Plugin, Position
 
 # 允许通过 update() 修改的业务字段（id/关联键/时间戳等由系统维护）
 UPDATABLE_FIELDS = {
@@ -100,6 +100,22 @@ class LogService:
         return result
 
     @staticmethod
+    def by_range(start: date, end: date) -> list[Log]:
+        """查询 [start, end) 内的审计日志，并带上工作名（过滤回收站里的工作）。
+
+        工作日历的「工作日报」视图用：按 created_time 归属日期，倒序返回。
+        """
+        return list(
+            Log.select(Log, Job).join(Job)
+            .where(
+                Job.deleted == False,  # noqa: E712
+                Log.created_time >= datetime.combine(start, datetime.min.time()),
+                Log.created_time < datetime.combine(end, datetime.min.time()),
+            )
+            .order_by(Log.created_time.desc(), Log.id.desc())
+        )
+
+    @staticmethod
     def create(job_id: int, name: str, content: str = '',
                related_files: Optional[list[str]] = None) -> Log:
         log = Log(job_id=job_id, name=name, content=content)
@@ -111,6 +127,56 @@ class LogService:
     def record(job_id: int, action: str, detail: str = '', **kwargs):
         """供各 Service 调用的便捷埋点入口。"""
         return LogService.create(job_id, action, detail, **kwargs)
+
+
+class DailyReportService:
+    """工作日报正文：按自然日一条，存 SQLite。"""
+
+    @staticmethod
+    def migrate_from_config():
+        """一次性把旧版写在配置里的日报迁入 SQLite，并清掉配置键。"""
+        cfg = load_app_config()
+        raw = cfg.get('DAILY_REPORTS')
+        if not raw:
+            return
+        cfg.pop('DAILY_REPORTS', None)
+        for key, text in raw.items():
+            try:
+                day = date.fromisoformat(key)
+            except (TypeError, ValueError):
+                continue
+            DailyReportService.save(day, str(text or ''))
+        save_app_config(cfg)
+
+    @staticmethod
+    def get(day: date) -> str:
+        row = DailyReport.get_or_none(DailyReport.day == day)
+        return row.content if row else ''
+
+    @staticmethod
+    def days(start: date, end: date) -> set[date]:
+        """[start, end) 内已写日报的日期，供日历格子标记「已填」。"""
+        return {
+            row.day for row in DailyReport.select(DailyReport.day).where(
+                DailyReport.day >= start, DailyReport.day < end,
+            )
+        }
+
+    @staticmethod
+    def save(day: date, content: str):
+        """保存或更新日报；正文为空时删除该日记录。"""
+        text = (content or '').strip()
+        row = DailyReport.get_or_none(DailyReport.day == day)
+        if not text:
+            if row is not None:
+                row.delete_instance()
+            return
+        if row is None:
+            row = DailyReport(day=day, content=text)
+        else:
+            row.content = text
+            row.updated_time = datetime.now()
+        row.save()
 
 
 class JobService:
@@ -541,6 +607,8 @@ class BackupService:
                          'start_time', 'end_time', 'assignee', 'estimate_hours',
                          'tags', 'deleted', '_position')),
         ('logs', Log, ('id', 'job_id', 'name', 'content', 'created_time', 'related_files')),
+        ('daily_reports', DailyReport,
+         ('id', 'day', 'content', 'created_time', 'updated_time')),
     )
 
     @staticmethod
@@ -560,6 +628,8 @@ class BackupService:
                     # 本身就是 JSON 字符串，直接落盘
                     if isinstance(value, datetime):
                         value = value.isoformat(timespec='seconds')
+                    elif isinstance(value, date):
+                        value = value.isoformat()
                     row[name] = value
                 rows.append(row)
             result[key] = rows
@@ -570,7 +640,7 @@ class BackupService:
         """从 JSON 导入业务数据。merge=False 时先清空现有数据。返回导入条数。"""
         if not isinstance(data, dict) or 'jobs' not in data:
             raise ValueError('不是有效的备份文件')
-        counters = {'jobs': 0, 'tasks': 0, 'logs': 0}
+        counters = {'jobs': 0, 'tasks': 0, 'logs': 0, 'daily_reports': 0}
         field_map = {key: (model, fields)
                      for key, model, fields in BackupService._EXPORT_MODELS}
         # 保留原始主键，让 task/log 的 job_id 外键天然对得上；
@@ -578,10 +648,11 @@ class BackupService:
         skip_jobs: set[int] = set()
         with db.atomic():
             if not merge:
+                DailyReport.delete().execute()
                 Log.delete().execute()
                 Task.delete().execute()
                 Job.delete().execute()
-            for key in ('jobs', 'tasks', 'logs'):
+            for key in ('jobs', 'tasks', 'logs', 'daily_reports'):
                 model, allowed = field_map[key]
                 for raw in data.get(key, []) or []:
                     fields = {k: v for k, v in raw.items() if k in allowed}
@@ -600,10 +671,12 @@ class BackupService:
                                 fields[jf] = json.loads(fields[jf])
                             except (ValueError, TypeError):
                                 fields[jf] = []
-                    # 时间字段是 ISO 字符串 → datetime
-                    for tf in ('start_time', 'end_time', 'created_time'):
+                    # 时间字段是 ISO 字符串 → datetime / date
+                    for tf in ('start_time', 'end_time', 'created_time', 'updated_time'):
                         if tf in fields and isinstance(fields[tf], str):
                             fields[tf] = datetime.fromisoformat(fields[tf])
+                    if isinstance(fields.get('day'), str):
+                        fields['day'] = date.fromisoformat(fields['day'])
                     obj = model(**fields)
                     if rid is not None:
                         obj.id = rid

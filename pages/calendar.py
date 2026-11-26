@@ -1,6 +1,7 @@
 """
 任务日历（月视图）
 
+- 顶部可切换「任务排期 / 工作日报」：每天一条汇总条，点开左右对照日志写日报
 - 固定 6 行 × 7 列，从「当月 1 号所在周的周一」开始铺 42 天
 - 任务条按自然周切段，跨周处用 ‹ › 标记，首尾段才带圆角
 - 同一周内时间重叠的任务自动往下排泳道，超过 3 条折叠为 +N
@@ -21,16 +22,21 @@ from typing import Optional
 import flet as ft
 
 from common.decorate import catch_error
+from common.util import as_naive, datetime_2_date_str
 from constant import (
-    BG_PANEL, BORDER_RADIUS, COLOR_DANGER, COLOR_PRIMARY, COLOR_TEXT, OVERDUE, Status,
+    BG_PANEL, BORDER_RADIUS, COLOR_DANGER, COLOR_PRIMARY, COLOR_TEXT,
+    DATE_TIME_FMT, OVERDUE, Status,
 )
-from data.model import Task
-from data.service import TaskService
+from data.model import Log, Task
+from data.service import DailyReportService, LogService, TaskService
 from theme import (
     BG_CELL, BG_CELL_DIM, BG_TODAY, BORDER_SOFT as LINE, MUTED as TXT_DAY,
     TEXT_WEEKEND as TXT_DAY_WEEKEND, TEXT_DIM as TXT_DAY_DIM,
-    BG_CANVAS, BORDER_STRONG, ACCENT, SLATE, TEXT_SUBTLE,
-    FS_XS, FS_SM, FS_MD,
+    BG_CANVAS, BORDER_STRONG, ACCENT, ACCENT_BRIGHT, ACCENT_SOFT, INFO,
+    PURPLE, SAFE, WARN, SLATE, TEXT_SUBTLE,
+    BG_CARD_ALT, BG_DIALOG, BORDER_ACCENT, TRANSPARENT,
+    BG_INPUT, TEXT_BRIGHT, BTN_TEXT,
+    FONT_MONO, FS_XS, FS_SM, FS_MD, FS_LG, FS_BASE,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,6 +51,14 @@ MAX_LANES = 3        # 每格最多展示几条
 BAR_HANDLE_W = 12    # 条两端拖拽热区宽度
 
 GRID_H = ROW_H * 6
+
+# 工作日报：每天一条汇总色条，用若干小圆点暗示当天涉及的工作
+REPORT_TOP = 28
+REPORT_BAR_H = 24
+REPORT_DOT = 5
+REPORT_EDITOR_LINES = 20
+REPORT_PANEL_H = 430
+REPORT_PALETTE = (ACCENT, INFO, PURPLE, SAFE, WARN, ACCENT_SOFT)
 
 # 日历容器左右内边距之和。若外层还有 padding，请把这里调大。
 OUTER_PAD = 40
@@ -314,6 +328,40 @@ def _bar_tooltip(task, label: str) -> str:
     return "\n".join(lines)
 
 
+def _as_datetime(v):
+    """审计时间可能是 aware，统一转 naive 再做日期归属/排序。"""
+    return as_naive(v) if isinstance(v, datetime) else None
+
+
+def _logs_by_day(logs: list[Log]) -> dict[date, list[Log]]:
+    """按 created_time 的日期分桶；日志已按时间倒序，桶内保持原顺序。"""
+    out: dict[date, list[Log]] = {}
+    for log in logs:
+        ts = _as_datetime(getattr(log, "created_time", None))
+        if ts is not None:
+            out.setdefault(ts.date(), []).append(log)
+    return out
+
+
+def _report_groups(day_logs: list[Log]) -> list[dict]:
+    """当天日志按工作聚合：一个工作一条色条，保留最新出现的工作在前。"""
+    groups: dict[int, dict] = {}
+    for log in day_logs:
+        job_id = log.job_id
+        group = groups.get(job_id)
+        if group is None:
+            job = getattr(log, "job", None)
+            name = (getattr(job, "name", "") or f"工作 {job_id}").strip()
+            group = groups[job_id] = {
+                "job_id": job_id,
+                "name": name,
+                "logs": [],
+                "color": REPORT_PALETTE[job_id % len(REPORT_PALETTE)],
+            }
+        group["logs"].append(log)
+    return list(groups.values())
+
+
 # ---------------------------------------------------------------- 视图
 @ft.component
 @catch_error
@@ -321,6 +369,12 @@ def calendar_view():
     today = date.today()
     ym, set_ym = ft.use_state((today.year, today.month))
     year, month = ym
+
+    # 顶部视图：task=任务排期（默认，保持原交互）；report=工作日报（按天聚合日志）
+    view, set_view = ft.use_state("task")
+
+    # 日报保存后自增，刷新格子上的「已填」标记。
+    report_rev, set_report_rev = ft.use_state(0)
 
     # 任务被编辑后自增，触发重渲染并重新查库
     rev, set_rev = ft.use_state(0)
@@ -346,6 +400,9 @@ def calendar_view():
 
     # 拖动每帧都重渲染，query + 分组 + 排泳道没必要每帧重算，缓存住。
     calc_ref = ft.use_ref(None)
+
+    # 工作日报日志按月缓存：切视图/切月份不重复查库。
+    report_ref = ft.use_ref(None)
 
     # 图例开关：被关掉的状态不参与绘制，也不计入统计
     hidden, set_hidden = ft.use_state(frozenset())
@@ -425,6 +482,29 @@ def calendar_view():
                 month_count += 1
 
         calc_ref.current = (cache_key, tasks, cells, segs, month_count)
+
+    # ---- 工作日报数据：只在该视图下查库，按月份缓存 ----
+    logs_by_day: dict[date, list[Log]] = {}
+    month_logs: list[Log] = []
+    filled_days: set[date] = set()
+    if view == "report":
+        report_key = (year, month, rev, report_rev)
+        cached_report = report_ref.current
+        if cached_report is not None and cached_report[0] == report_key:
+            logs = cached_report[1]
+            if len(cached_report) > 2:
+                filled_days = cached_report[2]
+        else:
+            logs = LogService.by_range(cells[0], cells[-1] + timedelta(days=1))
+            filled_days = DailyReportService.days(cells[0], cells[-1] + timedelta(days=1))
+            report_ref.current = (report_key, logs, filled_days)
+        logs_by_day = _logs_by_day(logs)
+        month_first = date(year, month, 1)
+        month_last = date(year + (month == 12), (month % 12) + 1, 1) - timedelta(days=1)
+        for log in logs:
+            ts = _as_datetime(getattr(log, "created_time", None))
+            if ts is not None and month_first <= ts.date() <= month_last:
+                month_logs.append(log)
 
     def goto(delta: int):
         set_ym(lambda cur: _shift_month(cur, delta))
@@ -539,6 +619,123 @@ def calendar_view():
             ),
         )
         _overlay_add(card)
+
+    def open_day_report(day: date, logs: list[Log]):
+        """点日报汇总条 → 左侧按工作分组的审计日志，右侧等高编辑框写日报。"""
+        left_w = 420
+
+        # 日志已按时间倒序；_report_groups 按工作聚合，同时保留组内顺序。
+        left_rows: list[ft.Control] = []
+        for group in _report_groups(logs):
+            left_rows.append(
+                ft.Row(
+                    controls=[
+                        ft.Container(width=8, height=8,
+                                     bgcolor=group["color"], border_radius=4),
+                        ft.Text(group["name"], size=FS_LG, color=COLOR_TEXT,
+                                weight=ft.FontWeight.W_500),
+                        ft.Container(expand=True),
+                        ft.Text(f"{len(group['logs'])} 条", size=FS_XS, color=SLATE),
+                    ],
+                    spacing=8,
+                )
+            )
+            for log in group["logs"]:
+                ts = _as_datetime(getattr(log, "created_time", None))
+                content = str(log.content or "").strip()
+                bits: list[ft.Control] = [
+                    ft.Row(
+                        controls=[
+                            ft.Text(
+                                datetime_2_date_str(ts, DATE_TIME_FMT) if ts else "—",
+                                size=FS_XS, color=INFO, font_family=FONT_MONO,
+                            ),
+                            ft.Text(
+                                str(log.name or "未命名动作").strip(), size=FS_MD,
+                                color=COLOR_TEXT, weight=ft.FontWeight.W_500,
+                            ),
+                        ],
+                        spacing=8,
+                    )
+                ]
+                if content:
+                    bits.append(ft.Text(content, size=FS_XS, color=SLATE))
+                if log.related_files:
+                    bits.append(ft.Text(
+                        "附件：" + "、".join(log.related_files),
+                        size=FS_XS, color=ACCENT_SOFT,
+                    ))
+                left_rows.append(
+                    ft.Container(
+                        bgcolor=BG_CARD_ALT,
+                        border=ft.Border(left=ft.BorderSide(2, group["color"])),
+                        border_radius=6,
+                        padding=ft.Padding(left=10, top=6, right=10, bottom=6),
+                        content=ft.Column(bits, spacing=3, tight=True),
+                    )
+                )
+            left_rows.append(ft.Container(height=4))
+
+        if not left_rows:
+            left_rows.append(ft.Text("当天暂无审计日志", size=FS_MD, color=SLATE))
+
+        report_field = ft.TextField(
+            value=DailyReportService.get(day),
+            hint_text="对照左侧审计日志填写今日日报…",
+            multiline=True,
+            min_lines=REPORT_EDITOR_LINES,
+            max_lines=REPORT_EDITOR_LINES,
+            border_color=ACCENT_BRIGHT,
+            focused_border_color=ACCENT,
+            bgcolor=BG_INPUT,
+            color=TEXT_BRIGHT,
+            text_style=ft.TextStyle(color=TEXT_BRIGHT, size=FS_BASE),
+        )
+
+        def save(_):
+            DailyReportService.save(day, report_field.value or "")
+            ft.context.page.pop_dialog()
+            set_report_rev(lambda v: v + 1)
+
+        dialog = ft.AlertDialog(
+            title=ft.Text(
+                f"{day.month} 月 {day.day} 日 · 工作日报",
+                size=FS_LG, color=ACCENT_BRIGHT, weight=ft.FontWeight.BOLD,
+            ),
+            bgcolor=BG_DIALOG,
+            content=ft.Container(
+                width=900,
+                height=REPORT_PANEL_H,
+                content=ft.Row(
+                    controls=[
+                        ft.Container(
+                            width=left_w,
+                            height=REPORT_PANEL_H,
+                            content=ft.Column(
+                                left_rows, spacing=0, scroll=ft.ScrollMode.AUTO,
+                            ),
+                        ),
+                        ft.Container(width=16),
+                        ft.Container(
+                            height=REPORT_PANEL_H,
+                            expand=True,
+                            content=ft.Column(
+                                controls=[report_field],
+                                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                            ),
+                        ),
+                    ],
+                    spacing=0,
+                    vertical_alignment=ft.CrossAxisAlignment.START,
+                ),
+            ),
+            actions=[
+                ft.TextButton("关闭", on_click=lambda e: ft.context.page.pop_dialog()),
+                ft.Button("保存日报", bgcolor=ACCENT_BRIGHT, color=BTN_TEXT,
+                          on_click=save),
+            ],
+        )
+        ft.context.page.show_dialog(dialog)
 
     # ---------- 背景格子（只负责底色和描边） ----------
     cell_controls: list[ft.Control] = []
@@ -869,6 +1066,52 @@ def calendar_view():
             )
         )
 
+    # ---------- 工作日报：每天一条汇总色条，点开对照日志写日报 ----------
+    report_controls: list[ft.Control] = []
+    if view == "report":
+        for i, day in enumerate(cells):
+            row, col = divmod(i, 7)
+            day_logs = logs_by_day.get(day, [])
+            if not day_logs:
+                continue
+            groups = _report_groups(day_logs)
+            dots = [
+                ft.Container(width=REPORT_DOT, height=REPORT_DOT,
+                             bgcolor=group["color"], border_radius=REPORT_DOT / 2)
+                for group in groups[:4]
+            ]
+            report_controls.append(
+                ft.GestureDetector(
+                    key=f"report-{i}",
+                    left=col * col_w + 6,
+                    top=row * ROW_H + REPORT_TOP,
+                    width=col_w - 12,
+                    height=REPORT_BAR_H,
+                    mouse_cursor=ft.MouseCursor.CLICK,
+                    on_tap=lambda e, d=day, gl=day_logs: open_day_report(d, gl),
+                    content=ft.Container(
+                        bgcolor=_blend(ACCENT, BG_CELL, 0.2),
+                        border=ft.Border(left=ft.BorderSide(3, ACCENT)),
+                        border_radius=4,
+                        padding=ft.Padding(left=8, top=0, right=8, bottom=0),
+                        alignment=ft.Alignment.CENTER_LEFT,
+                        content=ft.Row(
+                            controls=[
+                                ft.Row(dots, spacing=3),
+                                ft.Text(
+                                    f"{len(groups)} 个工作 · {len(day_logs)} 条",
+                                    size=FS_XS, color=ACCENT_SOFT, expand=True,
+                                    max_lines=1, overflow=ft.TextOverflow.ELLIPSIS,
+                                ),
+                                ft.Text("已填", size=FS_XS, color=SAFE)
+                                if day in filled_days else ft.Container(width=0),
+                            ],
+                            spacing=6,
+                        ),
+                    ),
+                )
+            )
+
     # ---------- 日期标签（放在 Stack 最后，永远压在任务条之上） ----------
     label_controls: list[ft.Control] = []
     for i, day in enumerate(cells):
@@ -911,22 +1154,53 @@ def calendar_view():
     grid = ft.Stack(
         width=grid_w,
         height=GRID_H,
-        controls=cell_controls + bar_controls + label_controls,
+        controls=cell_controls
+        + (bar_controls if view == "task" else report_controls)
+        + label_controls,
     )
 
-    # ---------- 顶部：标题在左、月份控件居中、统计在右 ----------
+    # ---------- 顶部视图切换：分段控件（选中态青色高亮 + 深底描边） ----------
+    def _view_segment(label: str, value: str):
+        active = view == value
+        return ft.GestureDetector(
+            mouse_cursor=ft.MouseCursor.CLICK,
+            on_tap=lambda e, v=value: set_view(v),
+            content=ft.Container(
+                content=ft.Text(
+                    label,
+                    size=FS_MD,
+                    color=ACCENT_BRIGHT if active else SLATE,
+                    weight=ft.FontWeight.BOLD if active else ft.FontWeight.W_400,
+                ),
+                padding=ft.Padding.symmetric(horizontal=14, vertical=6),
+                border_radius=6,
+                bgcolor=BG_CARD_ALT if active else TRANSPARENT,
+                border=ft.Border.all(1, BORDER_ACCENT if active else TRANSPARENT),
+            ),
+        )
+
+    def _view_switch():
+        return ft.Container(
+            content=ft.Row(
+                controls=[
+                    _view_segment("任务排期", "task"),
+                    _view_segment("工作日报", "report"),
+                ],
+                spacing=2,
+            ),
+            padding=ft.Padding.all(2),
+            bgcolor=BG_CANVAS,
+            border=ft.Border.all(1, BORDER_STRONG),
+            border_radius=8,
+        )
+
+    # ---------- 顶部：视图切换在左、月份控件居中、统计在右 ----------
     header = ft.Container(
         height=64,
         border=ft.Border(bottom=ft.BorderSide(1, LINE)),
         content=ft.Row(
             controls=[
-                ft.Row(
-                    controls=[
-                        ft.Text("任务日历", size=16, weight=ft.FontWeight.BOLD, color=COLOR_PRIMARY),
-                        ft.Text("月度视图", size=FS_MD, color=TEXT_SUBTLE),
-                    ],
-                    spacing=8,
-                ),
+                _view_switch(),
                 ft.Container(expand=True),
                 ft.Row(
                     controls=[
@@ -961,7 +1235,13 @@ def calendar_view():
                 ft.Row(
                     controls=[
                         ft.Container(width=7, height=7, bgcolor=COLOR_PRIMARY, border_radius=4),
-                        ft.Text(f"本月 {month_count} 个任务", size=FS_MD, color=TXT_DAY),
+                        ft.Text(
+                            f"本月 {len(month_logs)} 条日志 · "
+                            f"{len({log.job_id for log in month_logs})} 个工作"
+                            if view == "report"
+                            else f"本月 {month_count} 个任务",
+                            size=FS_MD, color=TXT_DAY,
+                        ),
                     ],
                     spacing=6,
                 ),
@@ -1015,19 +1295,33 @@ def calendar_view():
             ),
         )
 
-    legend = ft.Row(
-        controls=[legend_item(n) for n in LEGEND_NAMES]
-        + [
-            ft.Container(expand=True),
-            ft.Text(
-                "点击图例筛选状态 · 跨周任务按周断开，首尾带 ‹ › 标记",
-                size=FS_SM,
-                color=TEXT_SUBTLE,
-            ),
-        ],
-        spacing=24,
-        height=44,
-    )
+    if view == "task":
+        legend = ft.Row(
+            controls=[legend_item(n) for n in LEGEND_NAMES]
+            + [
+                ft.Container(expand=True),
+                ft.Text(
+                    "点击图例筛选状态 · 跨周任务按周断开，首尾带 ‹ › 标记",
+                    size=FS_SM,
+                    color=TEXT_SUBTLE,
+                ),
+            ],
+            spacing=24,
+            height=44,
+        )
+    else:
+        legend = ft.Row(
+            controls=[
+                ft.Icon(ft.Icons.HISTORY, size=14, color=ACCENT),
+                ft.Text(
+                    "每格汇总当天工作与日志 · 点击格子对照审计日志填写日报",
+                    size=FS_SM, color=SLATE,
+                ),
+            ],
+            spacing=8,
+            height=44,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
 
     return ft.Container(
         bgcolor=BG_PANEL,

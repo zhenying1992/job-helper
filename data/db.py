@@ -21,8 +21,8 @@ MODELS = []
 def _load_models():
     global MODELS
     if not MODELS:
-        from data.model import Job, Task, Log, Plugin
-        MODELS = [Job, Task, Log, Plugin]
+        from data.model import Job, Task, Log, DailyReport, Plugin
+        MODELS = [Job, Task, Log, DailyReport, Plugin]
     return MODELS
 
 

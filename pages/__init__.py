@@ -54,7 +54,7 @@ def _tab(label: str, route: str, key: str) -> ft.Control:
 
 TABS = (
     ("大盘概览", "/overview", "overview"),
-    ("日历排期", "/calendar", "calendar"),
+    ("工作日历", "/calendar", "calendar"),
     ("工作列表", "/jobs", "jobs"),
     ("配置中心", "/setting", "setting"),
 )

@@ -33,8 +33,8 @@ class TestSchema(unittest.TestCase):
 
         运行时不做 schema 兼容，因此建出的表必须逐字段吻合模型定义。
         """
-        from data.model import Job, Log, Plugin, Task  # noqa: F401
-        models = (Job, Task, Log, Plugin)
+        from data.model import Job, Log, DailyReport, Plugin, Task  # noqa: F401
+        models = (Job, Task, Log, DailyReport, Plugin)
         self.assertEqual(set(db_module.db.get_tables()),
                          {m._meta.table_name for m in models})
         for model in models:

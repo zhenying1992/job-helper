@@ -3,7 +3,7 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 
 from peewee import (
-    AutoField, BooleanField, CharField, DateTimeField, ForeignKeyField,
+    AutoField, BooleanField, CharField, DateField, DateTimeField, ForeignKeyField,
     IntegerField, TextField,
 )
 
@@ -120,6 +120,14 @@ class Log(BaseModel):
     @related_files.setter
     def related_files(self, value: list[str]):
         self._related_files = json.dumps(value or [], ensure_ascii=False)
+
+
+class DailyReport(BaseModel):
+    """按自然日保存的工作日报正文，与审计日志视图一一对应。"""
+    day = DateField(unique=True)
+    content = TextField(default='')
+    created_time = DateTimeField(default=datetime.now)
+    updated_time = DateTimeField(default=datetime.now)
 
 
 class Plugin(BaseModel):

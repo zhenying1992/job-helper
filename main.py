@@ -24,6 +24,8 @@ def main(page: ft.Page):
         from pages.urls import app
 
         init_db()
+        from data.service import DailyReportService
+        DailyReportService.migrate_from_config()
         page.render(app)
 
 if __name__ == "__main__":
